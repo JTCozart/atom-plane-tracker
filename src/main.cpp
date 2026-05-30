@@ -24,6 +24,7 @@ struct Ac {
     String  callsign;
     String  type;
     String  owner;
+    float   alt;
     AcClass cls;
 };
 
@@ -37,9 +38,13 @@ static bool                 hasHist    = false;
 static int                  cnt[4]     = {0, 0, 0, 0};
 
 // Multi-aircraft cycling
-static String               liveAcKey;           // ICAO of aircraft currently on screen
-static uint32_t             acCycleTimer = 0;    // millis of last auto-cycle
-static const uint32_t       AC_CYCLE_MS  = 5000;
+static String               liveAcKey;
+static uint32_t             acCycleTimer  = 0;
+static const uint32_t       AC_CYCLE_MS   = 5000;
+
+// Idle timeout — return to SCAN after 30s of no interaction on HIST/SUM
+static uint32_t             lastInteractMs  = 0;
+static const uint32_t       IDLE_TIMEOUT_MS = 30000;
 
 // Debug state
 static std::vector<String>  debugLines;
@@ -118,14 +123,10 @@ static void drawAcScreen(const Ac& ac, bool hist = false) {
     M5.Display.fillScreen(BG[c]);
     M5.Display.setTextColor(FG[c], BG[c]);
 
-    // Row 0 — class label + optional [HIST] tag
+    // Row 0 — class label
     M5.Display.setTextSize(1);
     M5.Display.setCursor(2, 2);
     M5.Display.print(LABEL[c]);
-    if (hist) {
-        M5.Display.setCursor(84, 2);
-        M5.Display.print("[HIST]");
-    }
 
     // Row 1-2 — callsign, large
     M5.Display.setTextSize(2);
@@ -134,23 +135,39 @@ static void drawAcScreen(const Ac& ac, bool hist = false) {
     if (cs.length() > 10) cs = cs.substring(0, 10);
     M5.Display.print(cs);
 
-    // Row 3 — aircraft type
+    // Row 3 — type
     M5.Display.setTextSize(1);
-    M5.Display.setCursor(2, 48);
+    M5.Display.setCursor(2, 34);
     M5.Display.print("Type: ");
     M5.Display.print(ac.type.length() ? ac.type : "???");
 
-    // Row 4-6 — owner (up to two lines of 21 chars each)
-    M5.Display.setCursor(2, 62);
+    // Row 4 — altitude
+    M5.Display.setCursor(2, 46);
+    if (ac.alt > 0) {
+        M5.Display.printf("Alt:  %.0f ft", ac.alt);
+    } else {
+        M5.Display.print("Alt:  ground");
+    }
+
+    // Row 5-7 — owner (up to two lines of 21 chars each)
+    M5.Display.setCursor(2, 58);
     M5.Display.print("Owner:");
     String owner = ac.owner.length() ? ac.owner : "Unknown";
-    M5.Display.setCursor(2, 74);
+    M5.Display.setCursor(2, 70);
     if (owner.length() <= 21) {
         M5.Display.print(owner);
     } else {
         M5.Display.print(owner.substring(0, 21));
-        M5.Display.setCursor(2, 86);
+        M5.Display.setCursor(2, 82);
         M5.Display.print(owner.substring(21, 42));
+    }
+
+    // History bar — red strip across the bottom
+    if (hist) {
+        M5.Display.fillRect(0, 116, 128, 12, RED);
+        M5.Display.setTextColor(WHITE, RED);
+        M5.Display.setCursor(30, 118);
+        M5.Display.print("[ HISTORY ]");
     }
 }
 
@@ -317,10 +334,11 @@ static void fetchAndUpdate() {
         String type  = plane["t"]        | "";
         String owner = plane["ownOp"]    | "";
         String cat   = plane["category"] | "";
+        float  alt   = plane["alt_baro"] | 0.0f;
 
         AcClass cls = classify(callsign, owner, milFlag, cat);
 
-        Ac ac = { icao, callsign, type, owner, cls };
+        Ac ac = { icao, callsign, type, owner, alt, cls };
         inRadius[icao] = ac;
         cnt[cls]++;
         lastAc   = ac;
@@ -363,10 +381,18 @@ void setup() {
 void loop() {
     M5.update();
 
+    // Idle timeout — return to SCAN after 30s of no interaction on HIST/SUM
+    if ((mode == SCR_HIST || mode == SCR_SUM) &&
+        millis() - lastInteractMs >= IDLE_TIMEOUT_MS) {
+        mode = SCR_SCAN;
+        render();
+    }
+
     // Long-press detection
     if (M5.BtnA.wasPressed()) {
         btnDownAt      = millis();
         longPressFired = false;
+        lastInteractMs = millis();
     }
     if (M5.BtnA.isPressed() && !longPressFired &&
         (millis() - btnDownAt >= LONG_PRESS_MS)) {
@@ -381,6 +407,7 @@ void loop() {
         render();
     }
     if (M5.BtnA.wasReleased() && !longPressFired) {
+        lastInteractMs = millis();
         // Short press: scroll in debug, or cycle screens
         if (mode == SCR_DEBUG) {
             int maxScroll = (int)debugLines.size() - DBG_LINES_VISIBLE;
