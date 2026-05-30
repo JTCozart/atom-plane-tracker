@@ -12,44 +12,44 @@
 
 // ── Global instances ──────────────────────────────────────────────────────────
 
-static Config        appCfg;
+static Config        config;
 static Display       display;
 static Notifier      notifier;
 static AircraftStore store;
-static WebUI         webUI(appCfg, store, display);
-static ScreenMode    mode       = SCR_SCAN;
-static ScreenMode    preDebug   = SCR_SCAN;
-static int           debugScroll = 0;
+static WebUI         webUI(config, store, display);
+static ScreenMode    mode             = ScreenMode::Scanning;
+static ScreenMode    preDebug         = ScreenMode::Scanning;
+static int           debugScrollOffset = 0;
 
 // Button state
-static uint32_t lastInteractMs = 0;
-static uint32_t btnDownAt      = 0;
-static bool     longPressFired = false;
-static uint32_t lastClickMs    = 0;
-static constexpr uint32_t IDLE_TIMEOUT_MS = 30000;
-static constexpr uint32_t LONG_PRESS_MS   = 800;
-static constexpr uint32_t DOUBLE_CLICK_MS = 400;
+static uint32_t lastInteractionTime = 0;
+static uint32_t buttonPressTime     = 0;
+static bool     longPressHandled    = false;
+static uint32_t lastClickTime       = 0;
+static constexpr uint32_t kIdleTimeoutMs      = 30000;
+static constexpr uint32_t kLongPressDurationMs = 800;
+static constexpr uint32_t kDoubleClickWindowMs = 400;
 
 // ── WiFi ──────────────────────────────────────────────────────────────────────
 
-static bool connectWifi() {
+static bool connectToWifi() {
     M5.Display.fillScreen(M5.Display.color565(0, 0, 0));
     M5.Display.setTextColor(M5.Display.color565(255, 255, 255),
                             M5.Display.color565(0, 0, 0));
     M5.Display.setTextSize(1);
     M5.Display.setCursor(0, 0);
     M5.Display.println("Connecting WiFi...");
-    M5.Display.println(appCfg.ssid);
+    M5.Display.println(config.ssid);
 
     WiFi.mode(WIFI_STA);
-    WiFi.begin(appCfg.ssid, appCfg.pass);
+    WiFi.begin(config.ssid, config.password);
     for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) delay(500);
 
     if (WiFi.status() == WL_CONNECTED) {
-        webUI.setDeviceIP(WiFi.localIP().toString());
+        webUI.setIPAddress(WiFi.localIP().toString());
         webUI.begin(mode, false);
         M5.Display.println("Connected!");
-        M5.Display.println(webUI.deviceIP().c_str());
+        M5.Display.println(webUI.ipAddress().c_str());
         delay(800);
         return true;
     }
@@ -62,37 +62,37 @@ static bool connectWifi() {
 
 static void render() {
     switch (mode) {
-        case SCR_SCAN:
-            if (store.hasActive()) {
-                const Ac* ac = store.displayAircraft();
+        case ScreenMode::Scanning:
+            if (store.hasActiveAircraft()) {
+                const Aircraft* ac = store.currentAircraft();
                 if (ac) {
-                    int eta = ac->etaSeconds(appCfg.lat, appCfg.lon, appCfg.radius);
-                    display.drawAircraft(*ac, false, 0, 0, eta);
+                    int eta = ac->etaSeconds(config.latitude, config.longitude, config.radius);
+                    display.showAircraft(*ac, false, 0, 0, eta);
                 }
             } else {
-                display.drawScan();
+                display.showScanning();
             }
             break;
-        case SCR_HIST:
+        case ScreenMode::History:
             if (store.historyCount() > 0)
-                display.drawAircraft(store.historyAt(store.historyIndex()),
+                display.showAircraft(store.historyAt(store.historyIndex()),
                                      true,
                                      store.historyIndex(),
                                      store.historyCount(),
                                      -1);
             else
-                display.drawScan();
+                display.showScanning();
             break;
-        case SCR_SUM:
-            display.drawSummary(store.count(CLS_MIL),
-                                store.count(CLS_MEDVAC),
-                                store.count(CLS_COMM),
-                                store.count(CLS_PRIV));
+        case ScreenMode::Summary:
+            display.showSummary(store.detectionCount(AircraftClass::Military),
+                                store.detectionCount(AircraftClass::Medevac),
+                                store.detectionCount(AircraftClass::Commercial),
+                                store.detectionCount(AircraftClass::Private));
             break;
-        case SCR_DEBUG:
-            display.drawDebug(store.debugLines(), debugScroll,
-                              store.lastHttpCode(), store.lastAcTotal(),
-                              webUI.deviceIP());
+        case ScreenMode::Debug:
+            display.showDebug(store.apiResponseLines(), debugScrollOffset,
+                              store.lastResponseCode(), store.lastAircraftCount(),
+                              webUI.ipAddress());
             break;
     }
 }
@@ -104,84 +104,84 @@ void setup() {
     M5.begin(m5cfg);
 
     display.begin();
-    appCfg.load();
+    config.load();
 
-    if (!connectWifi()) {
+    if (!connectToWifi()) {
         webUI.begin(mode, true);   // AP mode: starts SoftAP + web server
-        display.drawAPMode();
+        display.showSetupMode();
         return;  // loop() handles AP from here
     }
 
-    display.drawScan();
-    store.fetch(appCfg, notifier, mode);
+    display.showScanning();
+    store.fetch(config, notifier, mode);
     render();
 }
 
 void loop() {
     // AP mode: serve web requests only
-    if (webUI.isAPMode()) {
-        webUI.handle();
+    if (webUI.isInSetupMode()) {
+        webUI.processRequests();
         return;
     }
 
     M5.update();
-    webUI.handle();
+    webUI.processRequests();
 
-    // Idle timeout — return to SCAN after 30s of no interaction on HIST/SUM
-    if ((mode == SCR_HIST || mode == SCR_SUM) &&
-        millis() - lastInteractMs >= IDLE_TIMEOUT_MS) {
-        mode = SCR_SCAN;
+    // Idle timeout — return to Scanning after 30s of no interaction on History/Summary
+    if ((mode == ScreenMode::History || mode == ScreenMode::Summary) &&
+        millis() - lastInteractionTime >= kIdleTimeoutMs) {
+        mode = ScreenMode::Scanning;
         render();
     }
 
     // Long-press detection
     if (M5.BtnA.wasPressed()) {
-        btnDownAt      = millis();
-        longPressFired = false;
-        lastInteractMs = millis();
+        buttonPressTime     = millis();
+        longPressHandled    = false;
+        lastInteractionTime = millis();
     }
-    if (M5.BtnA.isPressed() && !longPressFired &&
-        (millis() - btnDownAt >= LONG_PRESS_MS)) {
-        longPressFired = true;
-        if (mode == SCR_DEBUG) {
+    if (M5.BtnA.isPressed() && !longPressHandled &&
+        (millis() - buttonPressTime >= kLongPressDurationMs)) {
+        longPressHandled = true;
+        if (mode == ScreenMode::Debug) {
             mode = preDebug;          // exit debug, restore previous screen
         } else {
-            preDebug    = mode;       // remember where we came from
-            debugScroll = 0;
-            mode        = SCR_DEBUG;
+            preDebug         = mode;  // remember where we came from
+            debugScrollOffset = 0;
+            mode             = ScreenMode::Debug;
         }
         render();
     }
-    if (M5.BtnA.wasReleased() && !longPressFired) {
-        lastInteractMs = millis();
+    if (M5.BtnA.wasReleased() && !longPressHandled) {
+        lastInteractionTime = millis();
         // Short press: scroll in debug, or cycle screens
-        if (mode == SCR_DEBUG) {
+        if (mode == ScreenMode::Debug) {
             uint32_t now = millis();
-            if (now - lastClickMs <= DOUBLE_CLICK_MS) {
-                lastClickMs = 0;  // reset so triple-click doesn't re-trigger
-                notifier.sendTest(appCfg, display);
+            if (now - lastClickTime <= kDoubleClickWindowMs) {
+                lastClickTime = 0;  // reset so triple-click doesn't re-trigger
+                notifier.sendTestNotification(config, display);
                 render();
             } else {
-                lastClickMs = now;
-                int maxScroll = (int)store.debugLines().size() - Display::LINES_VISIBLE;
+                lastClickTime = now;
+                int maxScroll = (int)store.apiResponseLines().size() - Display::kVisibleLineCount;
                 if (maxScroll < 0) maxScroll = 0;
-                debugScroll = (debugScroll >= maxScroll) ? 0 : debugScroll + Display::LINES_VISIBLE;
+                debugScrollOffset = (debugScrollOffset >= maxScroll) ? 0 : debugScrollOffset + Display::kVisibleLineCount;
                 render();
             }
         } else {
             switch (mode) {
-                case SCR_SCAN:
-                    mode = (store.historyCount() > 0) ? SCR_HIST : SCR_SUM;
+                case ScreenMode::Scanning:
+                    mode = (store.historyCount() > 0) ? ScreenMode::History : ScreenMode::Summary;
                     break;
-                case SCR_HIST:
+                case ScreenMode::History:
                     if (store.historyIndex() < store.historyCount() - 1) {
                         store.setHistoryIndex(store.historyIndex() + 1);  // show next older entry
                     } else {
                         store.setHistoryIndex(0);  // reset for next visit
-                        mode = SCR_SUM;
+                        mode = ScreenMode::Summary;
                     }
                     break;
-                case SCR_SUM:  mode = SCR_SCAN; break;
+                case ScreenMode::Summary:  mode = ScreenMode::Scanning; break;
                 default: break;
             }
             render();
@@ -191,10 +191,10 @@ void loop() {
     // Auto-cycle between multiple overhead aircraft every 5 seconds;
     // also redraw every second while live to keep ETA countdown fresh
     static uint32_t lastEtaRedraw = 0;
-    if (mode == SCR_SCAN && store.hasActive()) {
-        if (store.activeCount() > 1 &&
-            millis() - store.cycleTimer() >= AircraftStore::CYCLE_MS) {
-            store.advanceCycle();
+    if (mode == ScreenMode::Scanning && store.hasActiveAircraft()) {
+        if (store.activeAircraftCount() > 1 &&
+            millis() - store.lastCycleTime() >= AircraftStore::kCycleIntervalMs) {
+            store.cycleToNextAircraft();
             render();
             lastEtaRedraw = millis();
         } else if (millis() - lastEtaRedraw >= 1000) {
@@ -204,9 +204,9 @@ void loop() {
     }
 
     static uint32_t lastPoll = 0;
-    if (millis() - lastPoll >= appCfg.pollMs) {
+    if (millis() - lastPoll >= config.pollIntervalMs) {
         lastPoll = millis();
-        store.fetch(appCfg, notifier, mode);
+        store.fetch(config, notifier, mode);
         render();
     }
 }

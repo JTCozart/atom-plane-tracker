@@ -8,9 +8,9 @@ class Display;
 class Notifier {
 public:
     // Send a push notification for the given aircraft (no-op if ntfy not configured).
-    void send(const Ac& ac, const Config& cfg);
+    void notifyDetection(const Aircraft& aircraft, const Config& config);
 
     // Send a test notification; shows feedback via display.showMessage().
     // Returns the HTTP response code.
-    int sendTest(const Config& cfg, Display& display);
+    int sendTestNotification(const Config& config, Display& display);
 };

@@ -13,20 +13,20 @@ public:
 
     // Set up HTTP handlers and optionally start SoftAP.
     // mode is stored by pointer so handlers can read the current screen state.
-    void begin(ScreenMode& mode, bool apMode);
+    void begin(ScreenMode& mode, bool isSetupMode);
 
     // Call from loop() — dispatches pending HTTP requests.
-    void handle();
+    void processRequests();
 
-    bool isAPMode() const      { return _apMode; }
-    const String& deviceIP() const { return _deviceIP; }
-    void setDeviceIP(const String& ip) { _deviceIP = ip; }
+    bool isInSetupMode() const           { return _inSetupMode; }
+    const String& ipAddress() const      { return _ipAddress; }
+    void setIPAddress(const String& ip)  { _ipAddress = ip; }
 
 private:
     WebServer    _server{80};
-    bool         _apMode   = false;
-    String       _deviceIP = "0.0.0.0";
-    ScreenMode*  _mode     = nullptr;
+    bool         _inSetupMode = false;
+    String       _ipAddress   = "0.0.0.0";
+    ScreenMode*  _screenMode  = nullptr;
 
     Config&        _cfg;
     AircraftStore& _store;
