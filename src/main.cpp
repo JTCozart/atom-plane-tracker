@@ -303,6 +303,41 @@ static void render() {
     }
 }
 
+// ── ntfy notifications ────────────────────────────────────────────────────────
+
+static void sendNtfy(const Ac& ac) {
+    if (strlen(NTFY_TOKEN) == 0 || strlen(NTFY_TOPIC) == 0) return;
+
+    const char* priority;
+    const char* tags;
+    switch (ac.cls) {
+        case CLS_MIL:    priority = "urgent";  tags = "rotating_light"; break;
+        case CLS_MEDVAC: priority = "high";    tags = "ambulance";      break;
+        case CLS_COMM:   priority = "default"; tags = "airplane";       break;
+        default:         priority = "low";     tags = "small_airplane"; break;
+    }
+
+    String cs = ac.callsign.length() ? ac.callsign : (ac.type.length() ? ac.type : "Unknown");
+    char body[160];
+    snprintf(body, sizeof(body), "%s (%s) at %.0f ft\nOwner: %s",
+             cs.c_str(),
+             ac.type.length() ? ac.type.c_str() : "???",
+             ac.alt,
+             ac.owner.length() ? ac.owner.c_str() : "Unknown");
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, String("https://ntfy.sh/") + NTFY_TOPIC);
+    http.addHeader("Authorization", String("Bearer ") + NTFY_TOKEN);
+    http.addHeader("Content-Type",  "text/plain");
+    http.addHeader("Title",    String(LABEL[ac.cls]) + " Aircraft Detected");
+    http.addHeader("Priority", priority);
+    http.addHeader("Tags",     tags);
+    http.POST(body);
+    http.end();
+}
+
 // ── WiFi ──────────────────────────────────────────────────────────────────────
 
 static void connectWifi() {
@@ -420,6 +455,8 @@ static void fetchAndUpdate() {
         liveAcKey    = icao;
         acCycleTimer = millis();
         if (mode != SCR_DEBUG) mode = SCR_SCAN;
+
+        sendNtfy(ac);
     }
 
     // Remove aircraft that no longer appear in the response
