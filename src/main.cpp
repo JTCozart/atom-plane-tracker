@@ -115,6 +115,7 @@ static int                  lastAcTotal  = 0;
 // Forward declarations for web server handlers (defined after display section)
 static void handleRoot();
 static void handleSave();
+static void handleScreen();
 
 // Device IP — set after WiFi connect or AP start; shown on debug screen
 static String deviceIP = "0.0.0.0";
@@ -480,8 +481,9 @@ static WebServer apServer(80);
 static bool      inAPMode  = false;
 
 static void startWebServer() {
-    apServer.on("/",     HTTP_GET,  handleRoot);
-    apServer.on("/save", HTTP_POST, handleSave);
+    apServer.on("/",       HTTP_GET,  handleRoot);
+    apServer.on("/save",   HTTP_POST, handleSave);
+    apServer.on("/screen", HTTP_GET,  handleScreen);
     apServer.begin();
 }
 
@@ -518,7 +520,10 @@ static void handleRoot() {
     html += "<label>ntfy Classes <small style='font-weight:normal'>(comma-separated: MIL, MEDVAC, COMM, PRIV — empty&nbsp;=&nbsp;all)</small></label>"
             "<input name='ntfyClasses' value='" + String(appCfg.ntfyClasses) + "' placeholder='empty = all classes'>";
     html += "<button type='submit'>Save &amp; Reboot</button>"
-            "</form></body></html>";
+            "</form>"
+            "<p style='text-align:center;margin-top:16px'>"
+            "<a href='/screen'>&#128247; View current screen</a></p>"
+            "</body></html>";
 
     apServer.send(200, "text/html", html);
 }
@@ -553,6 +558,124 @@ static void handleSave() {
           "<h2>Saved! Rebooting&hellip;</h2></body></html>"));
     delay(1500);
     ESP.restart();
+}
+
+// Converts a uint16_t RGB565 color to a CSS hex string
+static String rgb565ToCss(uint16_t c) {
+    uint8_t r = ((c >> 11) & 0x1F) * 255 / 31;
+    uint8_t g = ((c >> 5)  & 0x3F) * 255 / 63;
+    uint8_t b = (c & 0x1F) * 255 / 31;
+    char buf[8];
+    snprintf(buf, sizeof(buf), "#%02X%02X%02X", r, g, b);
+    return String(buf);
+}
+
+static void handleScreen() {
+    // Build inner content based on current display state
+    String bg = "#000000", fg = "#FFFFFF", inner = "";
+
+    auto buildAcInner = [&](const Ac& ac, bool hist) {
+        bg = rgb565ToCss(BG[ac.cls]);
+        fg = rgb565ToCss(FG[ac.cls]);
+
+        String cs = ac.callsign.length() ? ac.callsign : "N/A";
+        if (cs.length() > 10) cs = cs.substring(0, 10);
+
+        inner += "<div style='font-size:10px'>" + String(LABEL[ac.cls]) + "</div>";
+        inner += "<div style='font-size:22px;line-height:1.2;margin:2px 0'>" + cs + "</div>";
+        inner += "<div>Type: " + String(ac.type.length() ? ac.type.c_str() : "???") + "</div>";
+
+        char buf[40];
+        if (ac.alt > 0) snprintf(buf, sizeof(buf), "Alt:  %.0f ft", ac.alt);
+        else            strcpy (buf, "Alt:  ground");
+        inner += "<div>" + String(buf) + "</div>";
+
+        if (!hist) {
+            int rawEta = etaSeconds(ac);
+            if (rawEta < 0) {
+                inner += "<div>ETA:  --:--</div>";
+            } else {
+                int elapsed = (int)((millis() - ac.lastFixMs) / 1000);
+                int eta = max(0, rawEta - elapsed);
+                snprintf(buf, sizeof(buf), "ETA:  %d:%02d", eta / 60, eta % 60);
+                inner += "<div>" + String(buf) + "</div>";
+            }
+        }
+
+        int ownerY = hist ? 0 : 4;
+        inner += "<div style='margin-top:" + String(ownerY) + "px'>Owner:</div>";
+        String owner = ac.owner.length() ? ac.owner : "Unknown";
+        if (owner.length() > 21) {
+            inner += "<div>" + owner.substring(0, 21) + "</div>";
+            inner += "<div>" + owner.substring(21, 42) + "</div>";
+        } else {
+            inner += "<div>" + owner + "</div>";
+        }
+
+        if (hist) {
+            char bar[28];
+            snprintf(bar, sizeof(bar), "[ HIST %d/%d ]", histIdx + 1, histCount);
+            inner += "<div style='position:absolute;bottom:0;left:0;right:0;"
+                     "background:#FF0000;color:#FFFFFF;text-align:center;"
+                     "padding:2px;font-size:10px'>" + String(bar) + "</div>";
+        }
+    };
+
+    if (inAPMode) {
+        inner = "<div style='font-size:20px;margin-bottom:6px'>SETUP</div>"
+                "<div>SSID: PlaneTracker</div>"
+                "<div>Pass: PlaneTracker</div>"
+                "<div style='margin-top:8px'>Open browser:</div>"
+                "<div>192.168.4.1</div>";
+    } else if (mode == SCR_SCAN && !inRadius.empty()) {
+        auto it = inRadius.find(liveAcKey);
+        if (it == inRadius.end()) it = inRadius.begin();
+        buildAcInner(it->second, false);
+    } else if (mode == SCR_SCAN) {
+        inner = "<div style='position:absolute;top:50%;left:50%;"
+                "transform:translate(-50%,-50%);font-size:22px;"
+                "white-space:nowrap'>SCANNING</div>";
+    } else if (mode == SCR_HIST) {
+        if (histCount > 0) buildAcInner(histLog[histIdx], true);
+        else inner = "<div style='margin-top:50%'>No history</div>";
+    } else if (mode == SCR_SUM) {
+        char buf[64];
+        inner += "<div style='font-size:20px;margin-bottom:8px'>SUMMARY</div>";
+        snprintf(buf, sizeof(buf), "<div>Military:   %d</div>", cnt[CLS_MIL]);    inner += buf;
+        snprintf(buf, sizeof(buf), "<div>Medevac:    %d</div>", cnt[CLS_MEDVAC]); inner += buf;
+        snprintf(buf, sizeof(buf), "<div>Commercial: %d</div>", cnt[CLS_COMM]);   inner += buf;
+        snprintf(buf, sizeof(buf), "<div>Private:    %d</div>", cnt[CLS_PRIV]);   inner += buf;
+    } else if (mode == SCR_DEBUG) {
+        inner += "<div>DBG HTTP:" + String(lastHttpCode) + " ac:" + String(lastAcTotal) + "</div>";
+        inner += "<div>IP: " + deviceIP + "</div>";
+        int shown = min((int)debugLines.size() - debugScroll, 13);
+        for (int i = 0; i < shown; i++) {
+            String line = debugLines[debugScroll + i];
+            if (line.length() > 21) line = line.substring(0, 21);
+            inner += "<div>" + line + "</div>";
+        }
+    }
+
+    // Wrap in a styled 256×256 div (2× the physical 128×128 display)
+    uint32_t refreshSec = max(5u, appCfg.pollMs / 1000);
+    String html =
+        "<!DOCTYPE html><html><head>"
+        "<title>PlaneTracker &mdash; Screen</title>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<meta http-equiv='refresh' content='" + String(refreshSec) + "'>"
+        "<style>"
+        "body{margin:20px;font-family:sans-serif;text-align:center}"
+        "#scr{width:256px;height:256px;display:inline-block;position:relative;"
+        "font-family:monospace;font-size:12px;padding:6px;box-sizing:border-box;"
+        "border:4px solid #222;border-radius:6px;overflow:hidden;text-align:left}"
+        "</style></head><body>"
+        "<h2>Device Screen</h2>"
+        "<div id='scr' style='background:" + bg + ";color:" + fg + "'>" + inner + "</div>"
+        "<p style='color:#666;font-size:.85em'>Auto-refreshes every " + String(refreshSec) + "s</p>"
+        "<p><a href='/'>&#9881; Settings</a></p>"
+        "</body></html>";
+
+    apServer.send(200, "text/html", html);
 }
 
 static void startAPMode() {
