@@ -84,7 +84,7 @@ void WebUI::handleSave() {
     if (_server.hasArg("radius"))
         prefs.putFloat ("radius", _server.arg("radius").toFloat());
     if (_server.hasArg("poll")) {
-        uint32_t pollValue = (uint32_t)max(0, _server.arg("poll").toInt());
+        uint32_t pollValue = (uint32_t)_server.arg("poll").toInt();
         if (pollValue < Config::kMinPollIntervalMs) pollValue = Config::kMinPollIntervalMs;
         prefs.putUInt("pollMs", pollValue);
     }
