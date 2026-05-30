@@ -21,16 +21,17 @@ enum AcClass    { CLS_MIL = 0, CLS_MEDVAC, CLS_COMM, CLS_PRIV };
 enum ScreenMode { SCR_SCAN, SCR_HIST, SCR_SUM, SCR_DEBUG };
 
 struct Ac {
-    String  icao;
-    String  callsign;
-    String  type;
-    String  owner;
-    float   alt;
-    float   lat;
-    float   lon;
-    float   gs;     // ground speed, knots
-    float   track;  // true track, degrees
-    AcClass cls;
+    String   icao;
+    String   callsign;
+    String   type;
+    String   owner;
+    float    alt;
+    float    lat;
+    float    lon;
+    float    gs;          // ground speed, knots
+    float    track;       // true track, degrees
+    uint32_t lastFixMs;   // millis() when lat/lon/gs/track were last updated
+    AcClass  cls;
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -210,10 +211,12 @@ static void drawAcScreen(const Ac& ac, bool hist = false) {
     // Row 5 — ETA until leaving radius (live only, not history)
     if (!hist) {
         M5.Display.setCursor(2, 58);
-        int eta = etaSeconds(ac);
-        if (eta < 0) {
+        int rawEta = etaSeconds(ac);
+        if (rawEta < 0) {
             M5.Display.print("ETA:  --:--");
         } else {
+            int elapsed = (int)((millis() - ac.lastFixMs) / 1000);
+            int eta = max(0, rawEta - elapsed);
             M5.Display.printf("ETA:  %d:%02d", eta / 60, eta % 60);
         }
     }
@@ -462,7 +465,23 @@ static void fetchAndUpdate() {
         icao.toUpperCase();
         seen.insert(icao);
 
-        if (inRadius.count(icao)) continue;  // already tracking this aircraft
+        float  alt   = plane["alt_baro"] | 0.0f;
+        float  lat   = plane["lat"]      | 0.0f;
+        float  lon   = plane["lon"]      | 0.0f;
+        float  gs    = plane["gs"]       | 0.0f;
+        float  track = plane["track"]    | 0.0f;
+
+        if (inRadius.count(icao)) {
+            // Refresh position/speed data so ETA stays accurate
+            Ac& existing = inRadius[icao];
+            existing.alt       = alt;
+            existing.lat       = lat;
+            existing.lon       = lon;
+            existing.gs        = gs;
+            existing.track     = track;
+            existing.lastFixMs = millis();
+            continue;
+        }
 
         bool milFlag = (plane["mil"] | 0) != 0 || ((plane["dbFlags"] | 0) & 1) != 0;
 
@@ -473,15 +492,10 @@ static void fetchAndUpdate() {
         String type  = plane["t"]        | "";
         String owner = plane["ownOp"]    | "";
         String cat   = plane["category"] | "";
-        float  alt   = plane["alt_baro"] | 0.0f;
-        float  lat   = plane["lat"]      | 0.0f;
-        float  lon   = plane["lon"]      | 0.0f;
-        float  gs    = plane["gs"]       | 0.0f;
-        float  track = plane["track"]    | 0.0f;
 
         AcClass cls = classify(callsign, owner, milFlag, cat);
 
-        Ac ac = { icao, callsign, type, owner, alt, lat, lon, gs, track, cls };
+        Ac ac = { icao, callsign, type, owner, alt, lat, lon, gs, track, millis(), cls };
         inRadius[icao] = ac;
         cnt[cls]++;
         lastAc   = ac;
