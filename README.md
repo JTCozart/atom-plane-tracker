@@ -100,8 +100,15 @@ Both modes serve the same form:
 | Latitude / Longitude | Center point for aircraft queries (decimal degrees) |
 | Search Radius (NM) | Query radius in nautical miles |
 | Poll Interval (ms) | How often to call the API |
+| ntfy Token | Leave blank to keep the current token |
+| ntfy Topic | Leave blank to disable notifications |
+| ntfy Classes | Comma-separated filter: `MIL`, `MEDVAC`, `COMM`, `PRIV` — empty = all |
 
 Submitting saves all values to on-device flash (NVS) and reboots. **NVS values take priority over `secrets.h`** on every subsequent boot. To reset to `secrets.h` defaults, submit the form with the desired values or erase NVS via the Arduino Preferences API.
+
+### Screen preview
+
+Navigate to `http://{device-ip}/screen` (or click **View current screen** on the settings page) to see a live HTML rendering of whatever the device is currently displaying — SCANNING, live aircraft, HISTORY, SUMMARY, or DEBUG. Colors match the physical display exactly. The page auto-refreshes at the configured poll interval.
 
 ---
 
@@ -116,7 +123,7 @@ The firmware can send push notifications via [ntfy.sh](https://ntfy.sh) when an 
 | Commercial | Default | ✈️ |
 | Private | Low | 🛩️ |
 
-Configure in `secrets.h`:
+Configure in `secrets.h` (compile-time defaults) or via the **configuration web UI** (saved to NVS, takes priority):
 
 ```cpp
 #define NTFY_TOKEN   "your-access-token"
@@ -125,7 +132,7 @@ Configure in `secrets.h`:
 #define NTFY_CLASSES "MIL,MEDVAC"
 ```
 
-Leave `NTFY_TOPIC` empty to disable notifications entirely. The double-press test on the debug screen is useful for verifying your token and topic are correct.
+Leave `NTFY_TOPIC` empty to disable notifications entirely. The **double-press test** on the debug screen sends a test notification and shows the HTTP response code, useful for verifying your token and topic without waiting for a real aircraft.
 
 ---
 
