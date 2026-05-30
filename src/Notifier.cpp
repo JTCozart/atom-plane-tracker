@@ -35,6 +35,9 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
              aircraft.type.length() ? aircraft.type.c_str() : "???",
              aircraft.altitude);
 
+    // FlightRadar24 link by ICAO hex
+    String fr24Url = "https://www.flightradar24.com/" + aircraft.icao;
+
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
@@ -44,6 +47,7 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     http.addHeader("Title",    String(aircraftClassName(aircraft.classification)) + " Aircraft Detected");
     http.addHeader("Priority", priority);
     http.addHeader("Tags",     tags);
+    http.addHeader("Action",   "view, FlightRadar24, " + fr24Url + ", clear=true");
     http.POST(body);
     http.end();
 }
