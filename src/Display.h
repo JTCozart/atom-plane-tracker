@@ -1,4 +1,5 @@
 #pragma once
+#include <M5Unified.h>
 #include <Arduino.h>
 #include <vector>
 #include "Aircraft.h"
@@ -36,10 +37,11 @@ public:
     uint16_t foregroundColorFor(AircraftClass cls) const { return _foregroundColors[toIndex(cls)]; }
 
 private:
-    uint16_t _colorBlack{}, _colorWhite{}, _colorRed{};
-    uint16_t _backgroundColors[4]{};
-    uint16_t _foregroundColors[4]{};
-    uint8_t  _scanAnimFrame{0};   // advances each showScanning() call
+    uint16_t  _colorBlack{}, _colorWhite{}, _colorRed{};
+    uint16_t  _backgroundColors[4]{};
+    uint16_t  _foregroundColors[4]{};
+    uint8_t   _scanAnimFrame{0};
+    M5Canvas* _scanCanvas{nullptr};  // off-screen sprite — eliminates flicker
 
     void initColors();
 };

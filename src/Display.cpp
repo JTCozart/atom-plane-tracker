@@ -22,47 +22,54 @@ void Display::initColors() {
 
 void Display::begin() {
     initColors();
+    // Off-screen canvas for the scanning animation — pushSprite() sends the
+    // complete frame in one DMA transfer, eliminating per-draw-call flicker.
+    _scanCanvas = new M5Canvas(&M5.Display);
+    _scanCanvas->setColorDepth(16);
+    _scanCanvas->createSprite(128, 128);
 }
 
 // ── Scan / AP screens ─────────────────────────────────────────────────────────
 
 void Display::showScanning() {
-    // ── Radar sweep animation ─────────────────────────────────────────────────
-    // 36 frames per revolution at 50 ms/frame ≈ 1.8 s per sweep.
-    const int     cx = 64, cy = 50;
-    const int     outerR = 35, innerR = 18;
-    const int     kFramesPerRev = 36;
-    const float   kRadPerFrame  = 2.0f * (float)M_PI / kFramesPerRev;
+    // ── Radar sweep — drawn into off-screen canvas, pushed in one transfer ────
+    const int   cx = 64, cy = 50;
+    const int   outerR = 35, innerR = 18;
+    const int   kFramesPerRev = 36;
+    const float kRadPerFrame  = 2.0f * (float)M_PI / kFramesPerRev;
 
-    uint16_t dimGray  = M5.Display.color565(50,  50,  50);
-    uint16_t midGray  = M5.Display.color565(110, 110, 110);
-    uint16_t nearWhite= M5.Display.color565(190, 190, 190);
+    uint16_t dimGray   = _scanCanvas->color565(50,  50,  50);
+    uint16_t midGray   = _scanCanvas->color565(110, 110, 110);
+    uint16_t nearWhite = _scanCanvas->color565(190, 190, 190);
 
-    M5.Display.fillScreen(_colorBlack);
+    _scanCanvas->fillScreen(_colorBlack);
 
     // Range rings
-    M5.Display.drawCircle(cx, cy, outerR, _colorWhite);
-    M5.Display.drawCircle(cx, cy, innerR, dimGray);
-    M5.Display.drawPixel(cx, cy, _colorWhite);
+    _scanCanvas->drawCircle(cx, cy, outerR, _colorWhite);
+    _scanCanvas->drawCircle(cx, cy, innerR, dimGray);
+    _scanCanvas->drawPixel(cx, cy, _colorWhite);
 
-    // Sweep + 3-step trailing glow (oldest → newest)
+    // Sweep line + 3-step trailing glow (dim → mid → near-white → white)
     uint16_t trailColors[4] = { dimGray, midGray, nearWhite, _colorWhite };
     for (int t = 0; t < 4; t++) {
         float angle = (_scanAnimFrame - (3 - t)) * kRadPerFrame;
         int   x2    = cx + (int)(outerR * sinf(angle));
         int   y2    = cy - (int)(outerR * cosf(angle));
-        M5.Display.drawLine(cx, cy, x2, y2, trailColors[t]);
+        _scanCanvas->drawLine(cx, cy, x2, y2, trailColors[t]);
     }
 
-    // ── "SCANNING..." label with animated dots ────────────────────────────────
-    M5.Display.setTextColor(_colorWhite, _colorBlack);
-    M5.Display.setTextSize(1);
-    int       dotCount = (_scanAnimFrame / (kFramesPerRev / 4)) % 4;
-    String    label    = "SCANNING";
+    // "SCANNING..." label with animated dot count
+    _scanCanvas->setTextColor(_colorWhite, _colorBlack);
+    _scanCanvas->setTextSize(1);
+    int    dotCount = (_scanAnimFrame / (kFramesPerRev / 4)) % 4;
+    String label    = "SCANNING";
     for (int i = 0; i < dotCount; i++) label += '.';
     int labelX = (128 - (int)label.length() * 6) / 2;
-    M5.Display.setCursor(max(0, labelX), 100);
-    M5.Display.print(label);
+    _scanCanvas->setCursor(max(0, labelX), 100);
+    _scanCanvas->print(label);
+
+    // Single atomic transfer to the physical display — no partial-frame flicker
+    _scanCanvas->pushSprite(0, 0);
 
     _scanAnimFrame++;
 }
