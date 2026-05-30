@@ -88,27 +88,25 @@ You need to set the **latitude** and **longitude** where you want to track aircr
 
 ---
 
-## Step 6: Update location on the device
+## Step 6: Find the device's IP address
 
-Now that you know your WiFi network name, you need to find the device's IP address and connect back to it.
+The device shows its IP address on the debug screen. Here's how:
 
-### Find the device's IP:
+1. Look at the device screen (should still be in setup/scanning mode)
+2. **Long-press the button for 0.8 seconds** (hold it down)
+3. The screen changes to show debug info with the IP address on line 2:
 
-1. Go back to your phone WiFi settings
-2. **Switch to your home WiFi** (the one you just set up on the device)
-3. Open your web browser
-4. Go to: **`http://192.168.1.1`** (common router address)
-   - If that doesn't work, check your router's admin page or look at connected devices
-   - You're looking for a device called **"Atom"** or **"ESP32"** — note its IP address
-   - It might be something like `192.168.1.50` or `192.168.1.100`
+```
+DBG HTTP:200 ac:7
+IP: 192.168.1.XX
+[rest of debug info...]
+```
 
-### OR: Use the debug screen on the device
+4. Write down the **IP address** (e.g., `192.168.1.50`)
 
-If you can see the device screen:
-1. Long-press the button for 0.8 seconds to enter **debug mode**
-2. The IP address is shown on line 2: **`IP: 192.168.1.XX`**
+5. **Long-press the button again** to exit debug and return to scanning
 
-Once you have the IP, open it in your browser: **`http://192.168.1.XX`** (replace `XX` with the actual numbers).
+6. Open your web browser and go to: **`http://192.168.1.XX`** (use the IP you found)
 
 ---
 
@@ -225,9 +223,8 @@ If you ever want to change your WiFi, location, or notification settings:
 
 ### Can't find the device's IP after setup
 
-- Check your router's admin page (usually `192.168.1.1` or `192.168.0.1`)
-- Look for a device called **"Atom"** or **"ESP32"**
-- Or, power off the device, wait 5 seconds, power it back on, and immediately check your router's "connected devices" list
+- Long-press the button on the device to enter debug mode — the IP is always shown on line 2
+- If the device won't turn on or the screen is broken, power it off, wait 5 seconds, and power it back on
 
 ---
 
