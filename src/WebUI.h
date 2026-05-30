@@ -34,6 +34,7 @@ private:
 
     void handleRoot();
     void handleSave();
+    void handleClear();
     void handleScreen();
 
     static String rgb565ToCss(uint16_t c);

@@ -16,6 +16,7 @@ void WebUI::begin(ScreenMode& mode, bool isSetupMode) {
 
     _server.on("/",       HTTP_GET,  [this]() { handleRoot();   });
     _server.on("/save",   HTTP_POST, [this]() { handleSave();   });
+    _server.on("/clear",  HTTP_POST, [this]() { handleClear();  });
     _server.on("/screen", HTTP_GET,  [this]() { handleScreen(); });
     _server.begin();
 }
@@ -62,8 +63,12 @@ void WebUI::handleRoot() {
             "<input name='ntfyClasses' value='" + String(_cfg.notifyClassFilter) + "' placeholder='empty = all classes'>";
     html += "<button type='submit'>Save &amp; Reboot</button>"
             "</form>"
+            "<form method='POST' action='/clear' style='margin-top:24px'>"
+            "<button type='submit' style='background:#D32F2F' onclick='return confirm(\"Reset all settings to factory defaults? This cannot be undone.\")'>"
+            "Clear All Settings</button>"
+            "</form>"
             "<p style='text-align:center;margin-top:16px'>"
-            "<a href='/screen'>&#128247; View current screen</a></p>"
+            "<a href='/screen'>View current screen</a></p>"
             "</body></html>";
 
     _server.send(200, "text/html", html);
@@ -100,6 +105,21 @@ void WebUI::handleSave() {
     _server.send(200, "text/html",
         F("<!DOCTYPE html><html><body style='font-family:sans-serif;text-align:center;margin-top:60px'>"
           "<h2>Saved! Rebooting&hellip;</h2></body></html>"));
+    delay(1500);
+    ESP.restart();
+}
+
+void WebUI::handleClear() {
+    Preferences prefs;
+    prefs.begin("plantracker", false);
+    prefs.clear();  // Erase all keys in this namespace
+    prefs.end();
+
+    _server.send(200, "text/html",
+        F("<!DOCTYPE html><html><body style='font-family:sans-serif;text-align:center;margin-top:60px'>"
+          "<h2>Settings cleared!</h2>"
+          "<p>Rebooting with factory defaults...</p>"
+          "</body></html>"));
     delay(1500);
     ESP.restart();
 }
