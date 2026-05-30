@@ -11,10 +11,7 @@
 // Fallback: "https://api.adsb.lol/v2/lat/%.6f/lon/%.6f/dist/%.1f"
 static const char* API_FMT = "https://api.adsb.one/v2/point/%.6f/%.6f/%.1f";
 
-static const uint32_t POLL_MS    = 10000;
-static const uint16_t BEEP_HZ    = 2000;
-static const uint16_t BEEP_ON_MS = 120;
-static const uint16_t BEEP_GAP_MS= 150;
+static const uint32_t POLL_MS = 10000;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,19 +77,6 @@ static AcClass classify(const String& callsign, const String& owner,
         return CLS_COMM;
 
     return CLS_PRIV;
-}
-
-// ── Beep ──────────────────────────────────────────────────────────────────────
-
-static const int BEEP_CNT[] = {5, 3, 2, 1};  // indexed by AcClass
-
-static void doBeep(AcClass cls) {
-    int n = BEEP_CNT[cls];
-    for (int i = 0; i < n; i++) {
-        M5.Speaker.tone(BEEP_HZ, BEEP_ON_MS);
-        delay(BEEP_ON_MS + BEEP_GAP_MS);
-    }
-    M5.Speaker.stop();
 }
 
 // ── Display ───────────────────────────────────────────────────────────────────
@@ -255,8 +239,6 @@ static void fetchAndUpdate() {
         lastAc  = ac;
         hasHist = true;
 
-        // Beep before render so the alert is immediate on detection
-        doBeep(cls);
     }
 
     // Remove aircraft that no longer appear in the response
@@ -280,7 +262,6 @@ static void fetchAndUpdate() {
 void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
-    M5.Speaker.setVolume(180);
 
     connectWifi();
     drawScan();
