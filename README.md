@@ -20,26 +20,30 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 - Detection screen shows **callsign**, **aircraft type**, **altitude**, and **ETA until leaving radius**.
 - ETA counts down in real time between API polls using the aircraft's last known position, speed, and track.
 - If multiple aircraft are overhead simultaneously the display cycles between them every 5 seconds.
-- When all aircraft leave the radius the screen returns to **SCANNING**.
+- When all aircraft leave the radius the screen returns to **SCANNING** with an animated radar sweep.
+- **Triple-click the button** to turn the display on/off (device continues running in the background).
 
 ---
 
 ## Screen navigation
 
-Short press of the button cycles through three screens at any time — including while aircraft are overhead.
+| Button Action | Effect |
+|---|---|
+| **Short press** | Cycle through screens: SCANNING → HISTORY → SUMMARY → SCANNING |
+| **Long press** (0.8 s) | Enter/exit DEBUG mode |
+| **Triple click** (within 600 ms) | Toggle display on/off |
 
-```
-SCANNING  →  HISTORY  →  SUMMARY  →  SCANNING  → ...
-```
+Screen details:
 
 | Screen | Description |
 |---|---|
-| **SCANNING** | Black screen with "SCANNING". When aircraft are overhead this shows the live detection screen instead. |
+| **SCANNING** | Animated radar sweep showing scanning is active. When aircraft are overhead this shows the live detection screen instead. |
 | **HISTORY** | Last 5 detected aircraft. Each press advances to the next older entry — `[ HIST 1/5 ]` counter shown in the red bar at the bottom. After the last entry one more press moves to SUMMARY. |
 | **SUMMARY** | Session totals by class (Military, Medevac, Commercial, Private). |
 
 - A new aircraft detected while on HISTORY or SUMMARY interrupts to the live view and returns to SCANNING when it leaves.
 - HISTORY and SUMMARY auto-return to SCANNING after **30 seconds** of no button activity.
+- **Triple-click** toggles the display (screen goes black but device continues running).
 
 ---
 
@@ -54,13 +58,14 @@ DBG HTTP:200 ac:7
 IP: 192.168.1.42
 A1B2C3 UAL123 B738
  cat:A3 mil:N 35000ft
- United Airlines
 ---
 D4E5F6 N12345 C172
  cat:A1 mil:N  2500ft
 ---
                 3/10
 ```
+
+### Debug screen details
 
 - **Line 1** — last HTTP status code and total aircraft count returned by the API.
 - **Line 2** — device IP address on the local network (see [Configuration web UI](#configuration-web-ui)).
@@ -99,12 +104,14 @@ Both modes serve the same form:
 | WiFi Password | Leave blank to keep the current password |
 | Latitude / Longitude | Center point for aircraft queries (decimal degrees) |
 | Search Radius (NM) | Query radius in nautical miles |
-| Poll Interval (ms) | How often to call the API |
+| Poll Interval (ms) | How often to call the API. **Minimum: 10000 ms (10 seconds)** |
 | ntfy Token | Leave blank to keep the current token |
 | ntfy Topic | Leave blank to disable notifications |
 | ntfy Classes | Comma-separated filter: `MIL`, `MEDVAC`, `COMM`, `PRIV` — empty = all |
 
-Submitting saves all values to on-device flash (NVS) and reboots. **NVS values take priority over `secrets.h`** on every subsequent boot. To reset to `secrets.h` defaults, submit the form with the desired values or erase NVS via the Arduino Preferences API.
+**Save & Reboot** button submits all values to on-device flash (NVS) and reboots. **NVS values take priority over `secrets.h`** on every subsequent boot.
+
+**Clear All Settings** button (red, at bottom of form) erases all saved preferences and resets to `secrets.h` defaults. Shows a confirmation dialog to prevent accidental clearing.
 
 ### Screen preview
 
@@ -122,6 +129,8 @@ The firmware can send push notifications via [ntfy.sh](https://ntfy.sh) when an 
 | Medevac | High | 🚑 |
 | Commercial | Default | ✈️ |
 | Private | Low | 🛩️ |
+
+Each notification includes a **FlightRadar24** action button that opens the live flight track using the aircraft's tail number (registration).
 
 Configure in `secrets.h` (compile-time defaults) or via the **configuration web UI** (saved to NVS, takes priority):
 
@@ -228,15 +237,32 @@ A commented fallback URL for [airplanes.live](https://airplanes.live) (`api.adsb
 
 ---
 
+## Getting started
+
+New to the project? Start with **[QUICKSTART.md](QUICKSTART.md)** — a step-by-step guide for first-time setup without needing to understand the code.
+
+---
+
 ## Project structure
 
 ```
 atom-plane-tracker/
-├── platformio.ini          # Build config — m5stack-atoms3, M5Unified, ArduinoJson
+├── platformio.ini              # Build config — m5stack-atoms3, M5Unified, ArduinoJson
+├── README.md                   # This file
+├── QUICKSTART.md               # Quick-start guide for new users
 ├── src/
-│   └── main.cpp            # All firmware logic
+│   ├── main.cpp                # Setup, loop, button/display logic
+│   ├── Aircraft.h/cpp          # Aircraft classification & ETA calculation
+│   ├── AircraftStore.h/cpp     # Aircraft state, history, API polling
+│   ├── AppState.h              # Screen mode enum
+│   ├── Config.h/cpp            # Configuration struct, NVS persistence
+│   ├── Display.h/cpp           # All display drawing (including animated scanning)
+│   ├── Notifier.h/cpp          # ntfy.sh push notifications
+│   └── WebUI.h/cpp             # HTTP server, configuration web UI
 ├── include/
-│   ├── secrets.h           # Your credentials — gitignored, never committed
-│   └── secrets.h.example   # Safe template
+│   ├── secrets.h               # Your credentials — gitignored, never committed
+│   └── secrets.h.example       # Safe template to copy from
 └── .gitignore
 ```
+
+**Architecture**: Refactored to follow SOLID principles. Thin `main.cpp` orchestrates independent, single-responsibility classes.
