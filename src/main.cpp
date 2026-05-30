@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <cmath>
 #include "secrets.h"
 
 // adsb.lol — free, no API key, ADSBExchange v2 format, radius in NM
@@ -25,6 +26,10 @@ struct Ac {
     String  type;
     String  owner;
     float   alt;
+    float   lat;
+    float   lon;
+    float   gs;     // ground speed, knots
+    float   track;  // true track, degrees
     AcClass cls;
 };
 
@@ -102,6 +107,39 @@ static AcClass classify(const String& callsign, const String& owner,
     return CLS_PRIV;
 }
 
+// ── ETA calculation ───────────────────────────────────────────────────────────
+
+// Returns seconds until the aircraft exits the query radius, or -1 if unknown.
+// Steps the aircraft position forward 5-second increments along its track until
+// it leaves the circle, capping at 60 minutes to avoid infinite loops.
+static int etaSeconds(const Ac& ac) {
+    if (ac.gs < 5.0f || ac.lat == 0.0f) return -1;
+
+    const float R_NM      = QUERY_RADIUS_NM;
+    const float DEG2RAD   = M_PI / 180.0f;
+    const float NM_PER_DEG_LAT = 60.0f;
+
+    float lat = ac.lat;
+    float lon = ac.lon;
+    float trackRad = ac.track * DEG2RAD;
+    float speedNmPerSec = ac.gs / 3600.0f;
+
+    for (int sec = 0; sec <= 3600; sec += 5) {
+        float dLat = cosf(trackRad) * speedNmPerSec * 5.0f / NM_PER_DEG_LAT;
+        float dLon = sinf(trackRad) * speedNmPerSec * 5.0f /
+                     (NM_PER_DEG_LAT * cosf(lat * DEG2RAD));
+        lat += dLat;
+        lon += dLon;
+
+        float dlat = (lat - QUERY_LAT) * NM_PER_DEG_LAT;
+        float dlon = (lon - QUERY_LON) * NM_PER_DEG_LAT * cosf(QUERY_LAT * DEG2RAD);
+        float dist = sqrtf(dlat * dlat + dlon * dlon);
+
+        if (dist > R_NM) return sec;
+    }
+    return -1;  // still inside after 60 min
+}
+
 // ── Display ───────────────────────────────────────────────────────────────────
 
 // Per-class: background, foreground, label
@@ -149,16 +187,28 @@ static void drawAcScreen(const Ac& ac, bool hist = false) {
         M5.Display.print("Alt:  ground");
     }
 
-    // Row 5-7 — owner (up to two lines of 21 chars each)
-    M5.Display.setCursor(2, 58);
+    // Row 5 — ETA until leaving radius (live only, not history)
+    if (!hist) {
+        M5.Display.setCursor(2, 58);
+        int eta = etaSeconds(ac);
+        if (eta < 0) {
+            M5.Display.print("ETA:  --:--");
+        } else {
+            M5.Display.printf("ETA:  %d:%02d", eta / 60, eta % 60);
+        }
+    }
+
+    // Row 6-7 — owner (up to two lines of 21 chars each)
+    int ownerY = hist ? 58 : 70;
+    M5.Display.setCursor(2, ownerY);
     M5.Display.print("Owner:");
     String owner = ac.owner.length() ? ac.owner : "Unknown";
-    M5.Display.setCursor(2, 70);
+    M5.Display.setCursor(2, ownerY + 12);
     if (owner.length() <= 21) {
         M5.Display.print(owner);
     } else {
         M5.Display.print(owner.substring(0, 21));
-        M5.Display.setCursor(2, 82);
+        M5.Display.setCursor(2, ownerY + 24);
         M5.Display.print(owner.substring(21, 42));
     }
 
@@ -335,10 +385,14 @@ static void fetchAndUpdate() {
         String owner = plane["ownOp"]    | "";
         String cat   = plane["category"] | "";
         float  alt   = plane["alt_baro"] | 0.0f;
+        float  lat   = plane["lat"]      | 0.0f;
+        float  lon   = plane["lon"]      | 0.0f;
+        float  gs    = plane["gs"]       | 0.0f;
+        float  track = plane["track"]    | 0.0f;
 
         AcClass cls = classify(callsign, owner, milFlag, cat);
 
-        Ac ac = { icao, callsign, type, owner, alt, cls };
+        Ac ac = { icao, callsign, type, owner, alt, lat, lon, gs, track, cls };
         inRadius[icao] = ac;
         cnt[cls]++;
         lastAc   = ac;
@@ -424,15 +478,22 @@ void loop() {
         render();
     }
 
-    // Auto-cycle between multiple overhead aircraft every 5 seconds
-    if (mode == SCR_SCAN && inRadius.size() > 1 &&
-        millis() - acCycleTimer >= AC_CYCLE_MS) {
-        acCycleTimer = millis();
-        auto it = inRadius.find(liveAcKey);
-        if (it == inRadius.end() || ++it == inRadius.end())
-            it = inRadius.begin();
-        liveAcKey = it->first;
-        render();
+    // Auto-cycle between multiple overhead aircraft every 5 seconds;
+    // also redraw every second while live to keep ETA countdown fresh
+    static uint32_t lastEtaRedraw = 0;
+    if (mode == SCR_SCAN && !inRadius.empty()) {
+        if (inRadius.size() > 1 && millis() - acCycleTimer >= AC_CYCLE_MS) {
+            acCycleTimer = millis();
+            auto it = inRadius.find(liveAcKey);
+            if (it == inRadius.end() || ++it == inRadius.end())
+                it = inRadius.begin();
+            liveAcKey = it->first;
+            render();
+            lastEtaRedraw = millis();
+        } else if (millis() - lastEtaRedraw >= 1000) {
+            lastEtaRedraw = millis();
+            render();
+        }
     }
 
     static uint32_t lastPoll = 0;
