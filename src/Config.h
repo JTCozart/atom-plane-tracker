@@ -3,14 +3,14 @@
 
 struct Config {
     char     ssid[64];
-    char     pass[64];
-    double   lat;
-    double   lon;
+    char     password[64];
+    double   latitude;
+    double   longitude;
     float    radius;
-    uint32_t pollMs;
-    char     ntfyToken[128];
-    char     ntfyTopic[64];
-    char     ntfyClasses[32];
+    uint32_t pollIntervalMs;
+    char     notifyToken[128];
+    char     notifyTopic[64];
+    char     notifyClassFilter[32];
 
     // Load settings from NVS; falls back to secrets.h macro defaults.
     void load();

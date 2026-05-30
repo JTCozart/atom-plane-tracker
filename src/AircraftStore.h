@@ -9,51 +9,51 @@
 
 class AircraftStore {
 public:
-    static constexpr uint32_t CYCLE_MS = 5000;
+    static constexpr uint32_t kCycleIntervalMs = 5000;
 
     // Fetch latest aircraft data from the API and update internal state.
-    // Sets mode to SCR_SCAN when a new aircraft arrives (unless SCR_DEBUG).
+    // Sets mode to ScreenMode::Scanning when a new aircraft arrives (unless ScreenMode::Debug).
     void fetch(const Config& cfg, Notifier& notifier, ScreenMode& mode);
 
     // Returns true if there are any aircraft currently in radius.
-    bool hasActive() const;
+    bool hasActiveAircraft() const;
 
     // Returns the number of aircraft currently in radius.
-    int activeCount() const;
+    int activeAircraftCount() const;
 
     // Returns a pointer to the currently-cycling live aircraft, or nullptr if none.
-    const Ac* displayAircraft() const;
+    const Aircraft* currentAircraft() const;
 
-    // Advance _liveKey to the next aircraft in the map.
-    void advanceCycle();
+    // Advance _displayKey to the next aircraft in the map.
+    void cycleToNextAircraft();
 
-    uint32_t cycleTimer() const { return _cycleTimer; }
+    uint32_t lastCycleTime() const { return _lastCycleTime; }
 
-    int historyCount() const     { return _histCount; }
-    int historyIndex() const     { return _histIdx; }
-    void setHistoryIndex(int i)  { _histIdx = i; }
-    const Ac& historyAt(int i) const { return _histLog[i]; }
+    int historyCount() const          { return _historyCount; }
+    int historyIndex() const          { return _historyIndex; }
+    void setHistoryIndex(int i)       { _historyIndex = i; }
+    const Aircraft& historyAt(int i) const { return _history[i]; }
 
-    int count(AcClass cls) const { return _cnt[cls]; }
+    int detectionCount(AircraftClass classification) const { return _detectionCounts[toIndex(classification)]; }
 
-    const std::vector<String>& debugLines() const { return _debugLines; }
-    int lastHttpCode() const  { return _lastHttpCode; }
-    int lastAcTotal()  const  { return _lastAcTotal; }
+    const std::vector<String>& apiResponseLines() const { return _apiResponseLines; }
+    int lastResponseCode()  const { return _lastResponseCode; }
+    int lastAircraftCount() const { return _lastAircraftCount; }
 
 private:
-    std::map<String, Ac> _inRadius;
-    String               _liveKey;
-    uint32_t             _cycleTimer  = 0;
+    std::map<String, Aircraft> _activeAircraft;
+    String                     _displayKey;
+    uint32_t                   _lastCycleTime = 0;
 
-    Ac  _histLog[5];
-    int _histCount = 0;
-    int _histIdx   = 0;
+    Aircraft _history[5];
+    int      _historyCount = 0;
+    int      _historyIndex = 0;
 
-    int _cnt[4] = {0, 0, 0, 0};
+    int _detectionCounts[4] = {0, 0, 0, 0};
 
-    std::vector<String> _debugLines;
-    int _lastHttpCode = 0;
-    int _lastAcTotal  = 0;
+    std::vector<String> _apiResponseLines;
+    int _lastResponseCode  = 0;
+    int _lastAircraftCount = 0;
 
-    void addToHistory(const Ac& ac);
+    void recordInHistory(const Aircraft& aircraft);
 };

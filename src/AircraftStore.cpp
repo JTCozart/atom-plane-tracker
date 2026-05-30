@@ -12,38 +12,38 @@ static const char* API_FMT = "https://api.adsb.lol/v2/lat/%.6f/lon/%.6f/dist/%.1
 
 // ── History ───────────────────────────────────────────────────────────────────
 
-void AircraftStore::addToHistory(const Ac& ac) {
-    int slots = (_histCount < 5) ? _histCount : 4;
-    for (int i = slots; i > 0; i--) _histLog[i] = _histLog[i - 1];
-    _histLog[0] = ac;
-    if (_histCount < 5) _histCount++;
-    _histIdx = 0;  // always show newest on next HIST visit
+void AircraftStore::recordInHistory(const Aircraft& aircraft) {
+    int slots = (_historyCount < 5) ? _historyCount : 4;
+    for (int i = slots; i > 0; i--) _history[i] = _history[i - 1];
+    _history[0] = aircraft;
+    if (_historyCount < 5) _historyCount++;
+    _historyIndex = 0;  // always show newest on next HIST visit
 }
 
 // ── Active aircraft accessors ─────────────────────────────────────────────────
 
-bool AircraftStore::hasActive() const {
-    return !_inRadius.empty();
+bool AircraftStore::hasActiveAircraft() const {
+    return !_activeAircraft.empty();
 }
 
-int AircraftStore::activeCount() const {
-    return (int)_inRadius.size();
+int AircraftStore::activeAircraftCount() const {
+    return (int)_activeAircraft.size();
 }
 
-const Ac* AircraftStore::displayAircraft() const {
-    if (_inRadius.empty()) return nullptr;
-    auto it = _inRadius.find(_liveKey);
-    if (it == _inRadius.end()) it = _inRadius.begin();
+const Aircraft* AircraftStore::currentAircraft() const {
+    if (_activeAircraft.empty()) return nullptr;
+    auto it = _activeAircraft.find(_displayKey);
+    if (it == _activeAircraft.end()) it = _activeAircraft.begin();
     return &it->second;
 }
 
-void AircraftStore::advanceCycle() {
-    if (_inRadius.empty()) return;
-    auto it = _inRadius.find(_liveKey);
-    if (it == _inRadius.end() || ++it == _inRadius.end())
-        it = _inRadius.begin();
-    _liveKey     = it->first;
-    _cycleTimer  = millis();
+void AircraftStore::cycleToNextAircraft() {
+    if (_activeAircraft.empty()) return;
+    auto it = _activeAircraft.find(_displayKey);
+    if (it == _activeAircraft.end() || ++it == _activeAircraft.end())
+        it = _activeAircraft.begin();
+    _displayKey    = it->first;
+    _lastCycleTime = millis();
 }
 
 // ── Fetch & update ────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ void AircraftStore::advanceCycle() {
 void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mode) {
     char url[128];
     snprintf(url, sizeof(url), API_FMT,
-             cfg.lat, cfg.lon, (double)cfg.radius);
+             cfg.latitude, cfg.longitude, (double)cfg.radius);
 
     WiFiClientSecure client;
     client.setInsecure();  // skip cert validation on embedded
@@ -60,7 +60,7 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
     http.setTimeout(8000);
 
     int httpCode = http.GET();
-    _lastHttpCode = httpCode;
+    _lastResponseCode = httpCode;
     if (httpCode != 200) { http.end(); return; }
 
     JsonDocument doc;
@@ -69,8 +69,8 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
 
     // Rebuild debug lines from raw response
     JsonArray acArr = doc["ac"].as<JsonArray>();
-    _lastAcTotal = acArr.size();
-    _debugLines.clear();
+    _lastAircraftCount = acArr.size();
+    _apiResponseLines.clear();
     for (JsonObject plane : acArr) {
         String icao = plane["hex"]      | "??????";  icao.toUpperCase();
         String cs   = plane["flight"]   | "";        cs.trim();
@@ -84,18 +84,18 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
         char buf[48];
         snprintf(buf, sizeof(buf), "%s %s %s", icao.c_str(),
                  cs.length() ? cs.c_str() : reg.c_str(), type.c_str());
-        _debugLines.push_back(buf);
+        _apiResponseLines.push_back(buf);
 
         snprintf(buf, sizeof(buf), " cat:%s mil:%c %5.0fft",
                  cat.c_str(), mil ? 'Y' : 'N', alt);
-        _debugLines.push_back(buf);
+        _apiResponseLines.push_back(buf);
 
         if (own.length()) {
-            _debugLines.push_back(String(" ") + own);
+            _apiResponseLines.push_back(String(" ") + own);
         }
-        _debugLines.push_back("---");
+        _apiResponseLines.push_back("---");
     }
-    if (_debugLines.empty()) _debugLines.push_back("No aircraft");
+    if (_apiResponseLines.empty()) _apiResponseLines.push_back("No aircraft");
 
     // Don't reset scroll if user is actively viewing debug
     // (scroll is owned by the caller / main.cpp — nothing to reset here)
@@ -116,15 +116,15 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
         float  gs    = plane["gs"]       | 0.0f;
         float  track = plane["track"]    | 0.0f;
 
-        if (_inRadius.count(icao)) {
+        if (_activeAircraft.count(icao)) {
             // Refresh position/speed data so ETA stays accurate
-            Ac& existing = _inRadius[icao];
-            existing.alt       = alt;
-            existing.lat       = lat;
-            existing.lon       = lon;
-            existing.gs        = gs;
-            existing.track     = track;
-            existing.lastFixMs = millis();
+            Aircraft& existing       = _activeAircraft[icao];
+            existing.altitude         = alt;
+            existing.latitude         = lat;
+            existing.longitude        = lon;
+            existing.groundSpeed      = gs;
+            existing.trackDegrees     = track;
+            existing.positionTimestamp = millis();
             continue;
         }
 
@@ -138,33 +138,33 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
         String owner = plane["ownOp"]    | "";
         String cat   = plane["category"] | "";
 
-        AcClass cls = Ac::classify(callsign, owner, milFlag, cat);
+        AircraftClass classification = Aircraft::classify(callsign, owner, milFlag, cat);
 
-        Ac ac = { icao, callsign, type, owner, alt, lat, lon, gs, track, millis(), cls };
-        _inRadius[icao] = ac;
-        _cnt[cls]++;
-        addToHistory(ac);
+        Aircraft aircraft = { icao, callsign, type, owner, alt, lat, lon, gs, track, millis(), classification };
+        _activeAircraft[icao] = aircraft;
+        _detectionCounts[toIndex(classification)]++;
+        recordInHistory(aircraft);
 
         // Interrupt to live view and pin to this new aircraft
-        _liveKey     = icao;
-        _cycleTimer  = millis();
-        if (mode != SCR_DEBUG) mode = SCR_SCAN;
+        _displayKey    = icao;
+        _lastCycleTime = millis();
+        if (mode != ScreenMode::Debug) mode = ScreenMode::Scanning;
 
-        notifier.send(ac, cfg);
+        notifier.notifyDetection(aircraft, cfg);
     }
 
     // Remove aircraft that no longer appear in the response
-    for (auto it = _inRadius.begin(); it != _inRadius.end(); ) {
+    for (auto it = _activeAircraft.begin(); it != _activeAircraft.end(); ) {
         if (!seen.count(it->first)) {
-            it = _inRadius.erase(it);
+            it = _activeAircraft.erase(it);
         } else {
             ++it;
         }
     }
 
     // If the aircraft we were showing left, snap to the next one
-    if (!_inRadius.empty() && !_inRadius.count(_liveKey)) {
-        _liveKey    = _inRadius.begin()->first;
-        _cycleTimer = millis();
+    if (!_activeAircraft.empty() && !_activeAircraft.count(_displayKey)) {
+        _displayKey    = _activeAircraft.begin()->first;
+        _lastCycleTime = millis();
     }
 }
