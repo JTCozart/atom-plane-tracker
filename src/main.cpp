@@ -235,6 +235,14 @@ void loop() {
         }
     }
 
+    // Animate the scanning screen at ~20 fps when idle
+    static uint32_t lastScanRefresh = 0;
+    if (mode == ScreenMode::Scanning && !store.hasActiveAircraft() &&
+        millis() - lastScanRefresh >= 50) {
+        lastScanRefresh = millis();
+        display.showScanning();
+    }
+
     static uint32_t lastPoll = 0;
     if (millis() - lastPoll >= config.pollIntervalMs) {
         lastPoll = millis();

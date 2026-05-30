@@ -49,7 +49,7 @@ void WebUI::handleRoot() {
             "<input name='lon' value='" + String(_cfg.longitude, 6) + "'>";
     html += "<label>Search Radius (nautical miles)</label>"
             "<input name='radius' value='" + String(_cfg.radius) + "'>";
-    html += "<label>Poll Interval (ms) <small style='font-weight:normal'>— minimum " +
+    html += "<label>Poll Interval (ms) <small style='font-weight:normal'>&mdash;minimum " +
             String(Config::kMinPollIntervalMs) + "ms</small></label>"
             "<input name='poll' type='number' min='" + String(Config::kMinPollIntervalMs) +
             "' value='" + String(_cfg.pollIntervalMs) + "'>";
@@ -58,7 +58,7 @@ void WebUI::handleRoot() {
             "<input name='ntfyToken' type='password' placeholder='leave blank to keep current'>";
     html += "<label>ntfy Topic</label>"
             "<input name='ntfyTopic' value='" + String(_cfg.notifyTopic) + "'>";
-    html += "<label>ntfy Classes <small style='font-weight:normal'>(comma-separated: MIL, MEDVAC, COMM, PRIV — empty&nbsp;=&nbsp;all)</small></label>"
+    html += "<label>ntfy Classes <small style='font-weight:normal'>(comma-separated: MIL, MEDVAC, COMM, PRIV &mdash;empty&nbsp;=&nbsp;all)</small></label>"
             "<input name='ntfyClasses' value='" + String(_cfg.notifyClassFilter) + "' placeholder='empty = all classes'>";
     html += "<button type='submit'>Save &amp; Reboot</button>"
             "</form>"
