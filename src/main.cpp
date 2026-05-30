@@ -310,8 +310,20 @@ static void render() {
 
 // ── ntfy notifications ────────────────────────────────────────────────────────
 
+static const char* classTag(AcClass cls) {
+    switch (cls) {
+        case CLS_MIL:    return "MIL";
+        case CLS_MEDVAC: return "MEDVAC";
+        case CLS_COMM:   return "COMM";
+        default:         return "PRIV";
+    }
+}
+
 static void sendNtfy(const Ac& ac) {
     if (strlen(NTFY_TOKEN) == 0 || strlen(NTFY_TOPIC) == 0) return;
+
+    // If NTFY_CLASSES is set, only notify for listed classes
+    if (strlen(NTFY_CLASSES) > 0 && strstr(NTFY_CLASSES, classTag(ac.cls)) == nullptr) return;
 
     const char* priority;
     const char* tags;
