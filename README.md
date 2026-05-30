@@ -1,33 +1,71 @@
 # atom-plane-tracker
 
-ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a public ADS-B API and displays live aircraft flying within a configurable radius of a fixed coordinate. No API key required.
+ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public ADS-B API and displays live aircraft flying within a configurable radius of a fixed coordinate. No API key required.
 
 ---
 
 ## What it does
 
-- Connects to a pre-configured WiFi network on boot.
-- Polls [airplanes.live](https://airplanes.live) (`api.adsb.one`) every 10 seconds for aircraft within **5 nautical miles** of a stored coordinate.
+- Connects to a pre-configured WiFi network on boot and immediately polls for aircraft.
+- Polls [adsb.lol](https://adsb.lol) every 15 seconds (configurable) for aircraft within a stored radius of a fixed coordinate.
 - Classifies each aircraft and changes the screen color accordingly:
 
-| Class | Background | Text | Detection |
+| Class | Background | Text | Basis |
 |---|---|---|---|
-| Military | Red | Black | `mil` flag, `dbFlags`, or known callsign prefix |
-| Medevac / Air Life | Blue | White | LIFEGRD/MEDVAC callsign prefix or operator name |
-| Commercial | Green | Black | Heavy/large ADS-B category or ICAO airline code |
+| Military | Red | Black | API `mil` flag or `dbFlags` bit 0 |
+| Medevac / Air Life | Blue | White | FAA LIFEGUARD/MEDVAC callsign prefix or known operator |
+| Commercial | Green | Black | ADS-B category A3/A4/A5 or ICAO airline code pattern |
 | Private / Other | Yellow | Black | Everything else |
 
-- Shows callsign, aircraft type (ICAO type code), and owner/operator.
-- When an aircraft leaves the radius the screen returns to **SCANNING**.
-- **Button** (front of device) cycles through three screens when no aircraft is overhead:
+- Detection screen shows **callsign**, **aircraft type**, **altitude**, **ETA until leaving radius**, and **owner/operator**.
+- ETA counts down in real time between API polls using the aircraft's last known position, speed, and track.
+- If multiple aircraft are overhead simultaneously the display cycles between them every 5 seconds.
+- When all aircraft leave the radius the screen returns to **SCANNING**.
+
+---
+
+## Screen navigation
+
+Short press of the button cycles through three screens. This works at any time — including while aircraft are overhead.
 
 ```
-SCANNING → HISTORY → SUMMARY → SCANNING → ...
+SCANNING  →  HISTORY  →  SUMMARY  →  SCANNING  → ...
 ```
 
-- **HISTORY** — last aircraft detected, shown with a `[HIST]` tag.
-- **SUMMARY** — session totals (e.g. 2 Military, 1 Commercial, 3 Private).
-- A new aircraft detected while viewing HISTORY or SUMMARY will interrupt and take over the display, then return to SCANNING when it leaves.
+| Screen | Description |
+|---|---|
+| **SCANNING** | Black screen with "SCANNING". When aircraft are overhead this shows the live detection screen instead. |
+| **HISTORY** | Last aircraft detected, displayed with a red `[ HISTORY ]` bar at the bottom. |
+| **SUMMARY** | Session totals by class (Military, Medevac, Commercial, Private). |
+
+- A new aircraft detected while on HISTORY or SUMMARY interrupts to the live view and returns to SCANNING when it leaves.
+- HISTORY and SUMMARY auto-return to SCANNING after **30 seconds** of no button activity.
+
+---
+
+## Debug mode
+
+**Long press (0.8 s)** on the button from any screen enters debug mode. Long press again to exit and return to the previous screen.
+
+- Shows raw API fields for every aircraft in the last response: ICAO hex, callsign/registration, type code, ADS-B category, military flag, altitude, and owner/operator.
+- Header displays the last HTTP status code and total aircraft count returned.
+- **Short press** in debug scrolls through the data.
+- **Double short press** (two taps within 400 ms) sends a test ntfy notification and shows the HTTP response code on screen.
+
+---
+
+## Push notifications (optional)
+
+The firmware can send push notifications via [ntfy.sh](https://ntfy.sh) when an aircraft enters the radius. Priority and tags vary by class:
+
+| Class | Priority | Tag |
+|---|---|---|
+| Military | Urgent | 🚨 |
+| Medevac | High | 🚑 |
+| Commercial | Default | ✈️ |
+| Private | Low | 🛩️ |
+
+Configure `NTFY_TOKEN` and `NTFY_TOPIC` in `secrets.h`. Leave `NTFY_TOPIC` as an empty string to disable notifications entirely.
 
 ---
 
@@ -40,14 +78,12 @@ SCANNING → HISTORY → SUMMARY → SCANNING → ...
 
 ## Prerequisites
 
-### Software
-
 | Tool | Notes |
 |---|---|
 | [VS Code](https://code.visualstudio.com/) | Any recent version |
-| [PlatformIO IDE extension](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide) | Install from VS Code Extensions panel |
+| [PlatformIO IDE extension](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide) | Install from the VS Code Extensions panel |
 
-PlatformIO will automatically download the ESP32 platform toolchain and all library dependencies (`M5Unified`, `ArduinoJson`) on first build — no manual installs needed.
+PlatformIO automatically downloads the ESP32 toolchain and all library dependencies (`M5Unified`, `ArduinoJson`) on first build.
 
 ---
 
@@ -62,8 +98,6 @@ cd atom-plane-tracker
 
 ### 2. Create your secrets file
 
-Copy the example and fill in your values:
-
 ```bash
 cp include/secrets.h.example include/secrets.h
 ```
@@ -71,13 +105,18 @@ cp include/secrets.h.example include/secrets.h
 Edit `include/secrets.h`:
 
 ```cpp
-#define WIFI_SSID       "YourNetworkName"
-#define WIFI_PASSWORD   "YourNetworkPassword"
+#define WIFI_SSID        "YourNetworkName"
+#define WIFI_PASSWORD    "YourNetworkPassword"
 
-#define QUERY_LAT        36.0000   // decimal degrees, positive = North
-#define QUERY_LON       -84.0000   // decimal degrees, negative = West
+#define QUERY_LAT         36.0000   // decimal degrees, positive = North
+#define QUERY_LON        -84.0000   // decimal degrees, negative = West
+#define QUERY_RADIUS_NM   5.0       // nautical miles (5 NM ≈ 5.75 statute miles)
 
-#define QUERY_RADIUS_NM  5.0       // nautical miles (5 NM ≈ 5.75 statute miles)
+#define POLL_INTERVAL_MS  15000     // API poll interval in milliseconds
+
+// Optional — leave NTFY_TOPIC empty to disable
+#define NTFY_TOKEN  "your-ntfy-access-token"
+#define NTFY_TOPIC  "your-topic-name"
 ```
 
 > `secrets.h` is listed in `.gitignore` and will never be committed.
@@ -87,10 +126,10 @@ Edit `include/secrets.h`:
 ## Compile
 
 1. Open the `atom-plane-tracker` folder in VS Code (`File → Open Folder`).
-2. PlatformIO will detect `platformio.ini` automatically.
-3. Click the **checkmark (Build)** icon in the PlatformIO toolbar at the bottom of the window, or open the Command Palette (`Ctrl+Shift+P`) and run **PlatformIO: Build**.
+2. PlatformIO detects `platformio.ini` automatically.
+3. Click the **checkmark (Build)** icon in the PlatformIO toolbar, or run **PlatformIO: Build** from the Command Palette (`Ctrl+Shift+P`).
 
-First build will take a few minutes while the toolchain and libraries download.
+First build takes a few minutes while the toolchain and libraries download.
 
 ---
 
@@ -98,26 +137,26 @@ First build will take a few minutes while the toolchain and libraries download.
 
 1. Connect the Atom S3R via USB-C.
 2. Click the **right-arrow (Upload)** icon in the PlatformIO toolbar, or run **PlatformIO: Upload** from the Command Palette.
-3. PlatformIO will compile (if needed), find the serial port automatically, and flash the device.
-4. The device will reboot and connect to WiFi immediately after flashing.
+3. PlatformIO compiles (if needed), finds the serial port automatically, and flashes the device.
+4. The device reboots, connects to WiFi, and polls immediately.
 
-> If the port is not detected, press and hold the reset button on the Atom S3R for 2 seconds before clicking Upload.
+> If the port is not detected, hold the reset button on the Atom S3R for 2 seconds before clicking Upload.
 
 ### Monitor serial output (optional)
 
-Click the **plug icon (Serial Monitor)** in the PlatformIO toolbar to open a terminal at 115200 baud. Useful for debugging WiFi connection and API responses.
+Click the **plug icon (Serial Monitor)** in the PlatformIO toolbar to open a terminal at 115200 baud.
 
 ---
 
 ## API
 
-Data is sourced from **[airplanes.live](https://airplanes.live)** via their free REST API hosted at `api.adsb.one`. No account or API key is required. The endpoint used is:
+Data comes from **[adsb.lol](https://adsb.lol)** — a community-run, free ADS-B feed with no account or API key required. The endpoint used is:
 
 ```
-GET https://api.adsb.one/v2/point/{lat}/{lon}/{radius_nm}
+GET https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{radius_nm}
 ```
 
-A commented fallback URL for [adsb.lol](https://adsb.lol) (identical response format) is included in `src/main.cpp`.
+A commented fallback URL for [airplanes.live](https://airplanes.live) (`api.adsb.one`) is in `src/main.cpp` — identical response format, swap by uncommenting.
 
 ---
 
@@ -125,11 +164,11 @@ A commented fallback URL for [adsb.lol](https://adsb.lol) (identical response fo
 
 ```
 atom-plane-tracker/
-├── platformio.ini          # Build config — ESP32-S3, M5Unified, ArduinoJson
+├── platformio.ini          # Build config — m5stack-atoms3, M5Unified, ArduinoJson
 ├── src/
 │   └── main.cpp            # All firmware logic
 ├── include/
 │   ├── secrets.h           # Your credentials — gitignored, never committed
-│   └── secrets.h.example   # Safe template to commit and share
+│   └── secrets.h.example   # Safe template
 └── .gitignore
 ```
