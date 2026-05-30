@@ -8,11 +8,11 @@
 #include <vector>
 #include "secrets.h"
 
-// airplanes.live — free, no API key, ADSBExchange v2 format, radius in NM
-// Fallback: "https://api.adsb.lol/v2/lat/%.6f/lon/%.6f/dist/%.1f"
-static const char* API_FMT = "https://api.adsb.one/v2/point/%.6f/%.6f/%.1f";
+// adsb.lol — free, no API key, ADSBExchange v2 format, radius in NM
+// Fallback: "https://api.adsb.one/v2/point/%.6f/%.6f/%.1f"
+static const char* API_FMT = "https://api.adsb.lol/v2/lat/%.6f/lon/%.6f/dist/%.1f";
 
-static const uint32_t POLL_MS = 10000;
+static const uint32_t POLL_MS = 30000;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,6 +35,11 @@ static std::map<String, Ac> inRadius;
 static Ac                   lastAc;
 static bool                 hasHist    = false;
 static int                  cnt[4]     = {0, 0, 0, 0};
+
+// Multi-aircraft cycling
+static String               liveAcKey;           // ICAO of aircraft currently on screen
+static uint32_t             acCycleTimer = 0;    // millis of last auto-cycle
+static const uint32_t       AC_CYCLE_MS  = 5000;
 
 // Debug state
 static std::vector<String>  debugLines;
@@ -197,19 +202,19 @@ static void drawDebug() {
 }
 
 static void render() {
-    if (!inRadius.empty()) {
-        // Always show highest-priority live aircraft (lowest enum value wins)
-        Ac* best = nullptr;
-        for (auto& [id, a] : inRadius)
-            if (!best || a.cls < best->cls) best = &a;
-        drawAcScreen(*best);
-    } else {
-        switch (mode) {
-            case SCR_SCAN:  drawScan();                           break;
-            case SCR_HIST:  drawAcScreen(lastAc, /*hist=*/true); break;
-            case SCR_SUM:   drawSummary();                        break;
-            case SCR_DEBUG: drawDebug();                          break;
-        }
+    switch (mode) {
+        case SCR_SCAN:
+            if (!inRadius.empty()) {
+                auto it = inRadius.find(liveAcKey);
+                if (it == inRadius.end()) it = inRadius.begin();
+                drawAcScreen(it->second);
+            } else {
+                drawScan();
+            }
+            break;
+        case SCR_HIST:  drawAcScreen(lastAc, /*hist=*/true); break;
+        case SCR_SUM:   drawSummary();                        break;
+        case SCR_DEBUG: drawDebug();                          break;
     }
 }
 
@@ -318,24 +323,28 @@ static void fetchAndUpdate() {
         Ac ac = { icao, callsign, type, owner, cls };
         inRadius[icao] = ac;
         cnt[cls]++;
-        lastAc  = ac;
-        hasHist = true;
+        lastAc   = ac;
+        hasHist  = true;
 
+        // Interrupt to live view and pin to this new aircraft
+        liveAcKey    = icao;
+        acCycleTimer = millis();
+        if (mode != SCR_DEBUG) mode = SCR_SCAN;
     }
 
     // Remove aircraft that no longer appear in the response
-    bool anyLeft = false;
     for (auto it = inRadius.begin(); it != inRadius.end(); ) {
         if (!seen.count(it->first)) {
             it = inRadius.erase(it);
         } else {
             ++it;
-            anyLeft = true;
         }
     }
 
-    if (!anyLeft && inRadius.empty() && mode != SCR_DEBUG) {
-        mode = SCR_SCAN;  // all aircraft gone, return to scanning
+    // If the aircraft we were showing left, snap to the next one
+    if (!inRadius.empty() && !inRadius.count(liveAcKey)) {
+        liveAcKey    = inRadius.begin()->first;
+        acCycleTimer = millis();
     }
 }
 
@@ -370,21 +379,31 @@ void loop() {
         render();
     }
     if (M5.BtnA.wasReleased() && !longPressFired) {
-        // Short press: scroll in debug, or cycle screens elsewhere
+        // Short press: scroll in debug, or cycle screens
         if (mode == SCR_DEBUG) {
             int maxScroll = (int)debugLines.size() - DBG_LINES_VISIBLE;
             if (maxScroll < 0) maxScroll = 0;
             debugScroll = (debugScroll >= maxScroll) ? 0 : debugScroll + DBG_LINES_VISIBLE;
-            render();
-        } else if (inRadius.empty()) {
+        } else {
             switch (mode) {
                 case SCR_SCAN: mode = hasHist ? SCR_HIST : SCR_SUM; break;
                 case SCR_HIST: mode = SCR_SUM;                        break;
                 case SCR_SUM:  mode = SCR_SCAN;                       break;
                 default: break;
             }
-            render();
         }
+        render();
+    }
+
+    // Auto-cycle between multiple overhead aircraft every 5 seconds
+    if (mode == SCR_SCAN && inRadius.size() > 1 &&
+        millis() - acCycleTimer >= AC_CYCLE_MS) {
+        acCycleTimer = millis();
+        auto it = inRadius.find(liveAcKey);
+        if (it == inRadius.end() || ++it == inRadius.end())
+            it = inRadius.begin();
+        liveAcKey = it->first;
+        render();
     }
 
     static uint32_t lastPoll = 0;
