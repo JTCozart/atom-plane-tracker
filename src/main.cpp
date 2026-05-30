@@ -356,6 +356,8 @@ void setup() {
 
     connectWifi();
     drawScan();
+    fetchAndUpdate();
+    render();
 }
 
 void loop() {
