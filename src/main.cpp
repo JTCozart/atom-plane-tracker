@@ -20,6 +20,9 @@ struct Config {
     double   lon;
     float    radius;
     uint32_t pollMs;
+    char     ntfyToken[128];
+    char     ntfyTopic[64];
+    char     ntfyClasses[32];
 };
 static Config appCfg;
 
@@ -28,20 +31,24 @@ static void loadConfig() {
     prefs.begin("plantracker", true);
     String storedSsid = prefs.getString("ssid", "");
     if (storedSsid.length() > 0) {
-        strncpy(appCfg.ssid, storedSsid.c_str(),                          sizeof(appCfg.ssid) - 1);
+        strncpy(appCfg.ssid, storedSsid.c_str(),                             sizeof(appCfg.ssid) - 1);
         strncpy(appCfg.pass, prefs.getString("pass", WIFI_PASSWORD).c_str(), sizeof(appCfg.pass) - 1);
         appCfg.lat    = prefs.getDouble("lat",    QUERY_LAT);
         appCfg.lon    = prefs.getDouble("lon",    QUERY_LON);
         appCfg.radius = prefs.getFloat ("radius", QUERY_RADIUS_NM);
         appCfg.pollMs = prefs.getUInt  ("pollMs", POLL_INTERVAL_MS);
     } else {
-        strncpy(appCfg.ssid, WIFI_SSID,      sizeof(appCfg.ssid) - 1);
-        strncpy(appCfg.pass, WIFI_PASSWORD,  sizeof(appCfg.pass) - 1);
+        strncpy(appCfg.ssid, WIFI_SSID,     sizeof(appCfg.ssid) - 1);
+        strncpy(appCfg.pass, WIFI_PASSWORD, sizeof(appCfg.pass) - 1);
         appCfg.lat    = QUERY_LAT;
         appCfg.lon    = QUERY_LON;
         appCfg.radius = QUERY_RADIUS_NM;
         appCfg.pollMs = POLL_INTERVAL_MS;
     }
+    // ntfy settings always loaded independently (may be set without WiFi reconfiguration)
+    strncpy(appCfg.ntfyToken,   prefs.getString("ntfyToken",   NTFY_TOKEN).c_str(),   sizeof(appCfg.ntfyToken)   - 1);
+    strncpy(appCfg.ntfyTopic,   prefs.getString("ntfyTopic",   NTFY_TOPIC).c_str(),   sizeof(appCfg.ntfyTopic)   - 1);
+    strncpy(appCfg.ntfyClasses, prefs.getString("ntfyClasses", NTFY_CLASSES).c_str(), sizeof(appCfg.ntfyClasses) - 1);
     prefs.end();
 }
 
@@ -398,10 +405,10 @@ static const char* classTag(AcClass cls) {
 }
 
 static void sendNtfy(const Ac& ac) {
-    if (strlen(NTFY_TOKEN) == 0 || strlen(NTFY_TOPIC) == 0) return;
+    if (strlen(appCfg.ntfyToken) == 0 || strlen(appCfg.ntfyTopic) == 0) return;
 
-    // If NTFY_CLASSES is set, only notify for listed classes
-    if (strlen(NTFY_CLASSES) > 0 && strstr(NTFY_CLASSES, classTag(ac.cls)) == nullptr) return;
+    // If ntfyClasses is set, only notify for listed classes
+    if (strlen(appCfg.ntfyClasses) > 0 && strstr(appCfg.ntfyClasses, classTag(ac.cls)) == nullptr) return;
 
     const char* priority;
     const char* tags;
@@ -423,8 +430,8 @@ static void sendNtfy(const Ac& ac) {
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
-    http.begin(client, String("https://ntfy.sh/") + NTFY_TOPIC);
-    http.addHeader("Authorization", String("Bearer ") + NTFY_TOKEN);
+    http.begin(client, String("https://ntfy.sh/") + appCfg.ntfyTopic);
+    http.addHeader("Authorization", String("Bearer ") + appCfg.ntfyToken);
     http.addHeader("Content-Type",  "text/plain");
     http.addHeader("Title",    String(LABEL[ac.cls]) + " Aircraft Detected");
     http.addHeader("Priority", priority);
@@ -434,7 +441,7 @@ static void sendNtfy(const Ac& ac) {
 }
 
 static void sendTestNtfy() {
-    if (strlen(NTFY_TOKEN) == 0 || strlen(NTFY_TOPIC) == 0) {
+    if (strlen(appCfg.ntfyToken) == 0 || strlen(appCfg.ntfyTopic) == 0) {
         M5.Display.fillScreen(C_BLACK);
         M5.Display.setTextColor(C_WHITE, C_BLACK);
         M5.Display.setTextSize(1);
@@ -453,8 +460,8 @@ static void sendTestNtfy() {
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
-    http.begin(client, String("https://ntfy.sh/") + NTFY_TOPIC);
-    http.addHeader("Authorization", String("Bearer ") + NTFY_TOKEN);
+    http.begin(client, String("https://ntfy.sh/") + appCfg.ntfyTopic);
+    http.addHeader("Authorization", String("Bearer ") + appCfg.ntfyToken);
     http.addHeader("Content-Type",  "text/plain");
     http.addHeader("Title",    "atom-plane-tracker test");
     http.addHeader("Priority", "default");
@@ -503,6 +510,13 @@ static void handleRoot() {
             "<input name='radius' value='" + String(appCfg.radius) + "'>";
     html += "<label>Poll Interval (ms)</label>"
             "<input name='poll' value='" + String(appCfg.pollMs) + "'>";
+    html += "<hr style='margin:18px 0'>";
+    html += "<label>ntfy Token</label>"
+            "<input name='ntfyToken' type='password' placeholder='leave blank to keep current'>";
+    html += "<label>ntfy Topic</label>"
+            "<input name='ntfyTopic' value='" + String(appCfg.ntfyTopic) + "'>";
+    html += "<label>ntfy Classes <small style='font-weight:normal'>(comma-separated: MIL, MEDVAC, COMM, PRIV — empty&nbsp;=&nbsp;all)</small></label>"
+            "<input name='ntfyClasses' value='" + String(appCfg.ntfyClasses) + "' placeholder='empty = all classes'>";
     html += "<button type='submit'>Save &amp; Reboot</button>"
             "</form></body></html>";
 
@@ -525,6 +539,12 @@ static void handleSave() {
         prefs.putFloat ("radius", apServer.arg("radius").toFloat());
     if (apServer.hasArg("poll"))
         prefs.putUInt  ("pollMs", (uint32_t)apServer.arg("poll").toInt());
+    if (apServer.hasArg("ntfyToken") && apServer.arg("ntfyToken").length() > 0)
+        prefs.putString("ntfyToken",   apServer.arg("ntfyToken"));
+    if (apServer.hasArg("ntfyTopic"))
+        prefs.putString("ntfyTopic",   apServer.arg("ntfyTopic"));
+    if (apServer.hasArg("ntfyClasses"))
+        prefs.putString("ntfyClasses", apServer.arg("ntfyClasses"));
 
     prefs.end();
 
