@@ -1,6 +1,8 @@
 #include <M5Unified.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <WebServer.h>
+#include <Preferences.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <map>
@@ -8,6 +10,40 @@
 #include <vector>
 #include <cmath>
 #include "secrets.h"
+
+// ── Runtime config (loaded from NVS, falls back to secrets.h) ────────────────
+
+struct Config {
+    char     ssid[64];
+    char     pass[64];
+    double   lat;
+    double   lon;
+    float    radius;
+    uint32_t pollMs;
+};
+static Config appCfg;
+
+static void loadConfig() {
+    Preferences prefs;
+    prefs.begin("plantracker", true);
+    String storedSsid = prefs.getString("ssid", "");
+    if (storedSsid.length() > 0) {
+        strncpy(appCfg.ssid, storedSsid.c_str(),                          sizeof(appCfg.ssid) - 1);
+        strncpy(appCfg.pass, prefs.getString("pass", WIFI_PASSWORD).c_str(), sizeof(appCfg.pass) - 1);
+        appCfg.lat    = prefs.getDouble("lat",    QUERY_LAT);
+        appCfg.lon    = prefs.getDouble("lon",    QUERY_LON);
+        appCfg.radius = prefs.getFloat ("radius", QUERY_RADIUS_NM);
+        appCfg.pollMs = prefs.getUInt  ("pollMs", POLL_INTERVAL_MS);
+    } else {
+        strncpy(appCfg.ssid, WIFI_SSID,      sizeof(appCfg.ssid) - 1);
+        strncpy(appCfg.pass, WIFI_PASSWORD,  sizeof(appCfg.pass) - 1);
+        appCfg.lat    = QUERY_LAT;
+        appCfg.lon    = QUERY_LON;
+        appCfg.radius = QUERY_RADIUS_NM;
+        appCfg.pollMs = POLL_INTERVAL_MS;
+    }
+    prefs.end();
+}
 
 // adsb.lol — free, no API key, ADSBExchange v2 format, radius in NM
 // Fallback: "https://api.adsb.one/v2/point/%.6f/%.6f/%.1f"
@@ -128,8 +164,8 @@ static AcClass classify(const String& callsign, const String& owner,
 static int etaSeconds(const Ac& ac) {
     if (ac.gs < 5.0f || ac.lat == 0.0f) return -1;
 
-    const float R_NM      = QUERY_RADIUS_NM;
-    const float DEG2RAD   = M_PI / 180.0f;
+    const float R_NM           = appCfg.radius;
+    const float DEG2RAD        = M_PI / 180.0f;
     const float NM_PER_DEG_LAT = 60.0f;
 
     float lat = ac.lat;
@@ -144,8 +180,8 @@ static int etaSeconds(const Ac& ac) {
         lat += dLat;
         lon += dLon;
 
-        float dlat = (lat - QUERY_LAT) * NM_PER_DEG_LAT;
-        float dlon = (lon - QUERY_LON) * NM_PER_DEG_LAT * cosf(QUERY_LAT * DEG2RAD);
+        float dlat = (lat - (float)appCfg.lat) * NM_PER_DEG_LAT;
+        float dlon = (lon - (float)appCfg.lon) * NM_PER_DEG_LAT * cosf((float)appCfg.lat * DEG2RAD);
         float dist = sqrtf(dlat * dlat + dlon * dlon);
 
         if (dist > R_NM) return sec;
@@ -186,6 +222,20 @@ static void drawScan() {
     // Center "SCANNING" — each char 12px wide, 8 chars = 96px; (128-96)/2 = 16
     M5.Display.setCursor(16, 56);
     M5.Display.print("SCANNING");
+}
+
+static void drawAPMode() {
+    M5.Display.fillScreen(C_BLACK);
+    M5.Display.setTextColor(C_WHITE, C_BLACK);
+    M5.Display.setTextSize(2);
+    M5.Display.setCursor(14, 4);
+    M5.Display.print("SETUP");
+
+    M5.Display.setTextSize(1);
+    M5.Display.setCursor(2, 30); M5.Display.print("SSID: PlaneTracker");
+    M5.Display.setCursor(2, 42); M5.Display.print("Pass: PlaneTracker");
+    M5.Display.setCursor(2, 60); M5.Display.print("Open browser:");
+    M5.Display.setCursor(2, 72); M5.Display.print("192.168.4.1");
 }
 
 static void drawAcScreen(const Ac& ac, bool hist = false) {
@@ -406,35 +456,114 @@ static void sendTestNtfy() {
     delay(1500);
 }
 
+// ── AP / config web server ────────────────────────────────────────────────────
+
+static WebServer apServer(80);
+static bool      inAPMode = false;
+
+static void handleRoot() {
+    String html =
+        F("<!DOCTYPE html><html><head><title>PlaneTracker Setup</title>"
+          "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+          "<style>"
+          "body{font-family:sans-serif;max-width:420px;margin:24px auto;padding:0 12px}"
+          "h2{margin-bottom:16px}label{display:block;margin-top:10px;font-size:.9em}"
+          "input{width:100%;padding:7px;box-sizing:border-box;margin-top:3px;font-size:1em}"
+          "button{margin-top:18px;width:100%;padding:10px;background:#1976D2;"
+          "color:#fff;border:none;font-size:1em;cursor:pointer;border-radius:4px}"
+          "</style></head><body><h2>&#9992; PlaneTracker Setup</h2>"
+          "<form method='POST' action='/save'>");
+
+    html += "<label>WiFi SSID</label>"
+            "<input name='ssid' value='" + String(appCfg.ssid) + "'>";
+    html += "<label>WiFi Password</label>"
+            "<input name='pass' type='password' placeholder='leave blank to keep current'>";
+    html += "<label>Latitude</label>"
+            "<input name='lat' value='" + String(appCfg.lat, 6) + "'>";
+    html += "<label>Longitude</label>"
+            "<input name='lon' value='" + String(appCfg.lon, 6) + "'>";
+    html += "<label>Search Radius (nautical miles)</label>"
+            "<input name='radius' value='" + String(appCfg.radius) + "'>";
+    html += "<label>Poll Interval (ms)</label>"
+            "<input name='poll' value='" + String(appCfg.pollMs) + "'>";
+    html += "<button type='submit'>Save &amp; Reboot</button>"
+            "</form></body></html>";
+
+    apServer.send(200, "text/html", html);
+}
+
+static void handleSave() {
+    Preferences prefs;
+    prefs.begin("plantracker", false);
+
+    if (apServer.hasArg("ssid") && apServer.arg("ssid").length() > 0)
+        prefs.putString("ssid", apServer.arg("ssid"));
+    if (apServer.hasArg("pass") && apServer.arg("pass").length() > 0)
+        prefs.putString("pass", apServer.arg("pass"));
+    if (apServer.hasArg("lat"))
+        prefs.putDouble("lat",    apServer.arg("lat").toDouble());
+    if (apServer.hasArg("lon"))
+        prefs.putDouble("lon",    apServer.arg("lon").toDouble());
+    if (apServer.hasArg("radius"))
+        prefs.putFloat ("radius", apServer.arg("radius").toFloat());
+    if (apServer.hasArg("poll"))
+        prefs.putUInt  ("pollMs", (uint32_t)apServer.arg("poll").toInt());
+
+    prefs.end();
+
+    apServer.send(200, "text/html",
+        F("<!DOCTYPE html><html><body style='font-family:sans-serif;text-align:center;margin-top:60px'>"
+          "<h2>Saved! Rebooting&hellip;</h2></body></html>"));
+    delay(1500);
+    ESP.restart();
+}
+
+static void startAPMode() {
+    inAPMode = true;
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP("PlaneTracker", "PlaneTracker");
+
+    apServer.on("/",     HTTP_GET,  handleRoot);
+    apServer.on("/save", HTTP_POST, handleSave);
+    apServer.begin();
+
+    drawAPMode();
+}
+
 // ── WiFi ──────────────────────────────────────────────────────────────────────
 
-static void connectWifi() {
+static bool connectWifi() {
     M5.Display.fillScreen(C_BLACK);
     M5.Display.setTextColor(C_WHITE, C_BLACK);
     M5.Display.setTextSize(1);
     M5.Display.setCursor(0, 0);
     M5.Display.println("Connecting WiFi...");
-    M5.Display.println(WIFI_SSID);
+    M5.Display.println(appCfg.ssid);
 
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(appCfg.ssid, appCfg.pass);
     for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) delay(500);
 
     if (WiFi.status() == WL_CONNECTED) {
         M5.Display.println("Connected!");
-    } else {
-        M5.Display.println("FAILED - retrying");
+        delay(800);
+        return true;
     }
-    delay(800);
+    M5.Display.println("Failed. Starting setup AP.");
+    delay(1200);
+    return false;
 }
 
 // ── Fetch & state update ──────────────────────────────────────────────────────
 
 static void fetchAndUpdate() {
-    if (WiFi.status() != WL_CONNECTED) { connectWifi(); return; }
+    if (WiFi.status() != WL_CONNECTED) {
+        if (!connectWifi()) { startAPMode(); return; }
+    }
 
     char url[128];
     snprintf(url, sizeof(url), API_FMT,
-             (double)QUERY_LAT, (double)QUERY_LON, (double)QUERY_RADIUS_NM);
+             appCfg.lat, appCfg.lon, (double)appCfg.radius);
 
     WiFiClientSecure client;
     client.setInsecure();  // skip cert validation on embedded
@@ -557,17 +686,29 @@ static void fetchAndUpdate() {
 
 
 void setup() {
-    auto cfg = M5.config();
-    M5.begin(cfg);
+    auto m5cfg = M5.config();
+    M5.begin(m5cfg);
 
     initColors();
-    connectWifi();
+    loadConfig();
+
+    if (!connectWifi()) {
+        startAPMode();
+        return;  // loop() handles AP from here
+    }
+
     drawScan();
     fetchAndUpdate();
     render();
 }
 
 void loop() {
+    // AP mode: serve web requests only
+    if (inAPMode) {
+        apServer.handleClient();
+        return;
+    }
+
     M5.update();
 
     // Idle timeout — return to SCAN after 30s of no interaction on HIST/SUM
@@ -648,7 +789,7 @@ void loop() {
     }
 
     static uint32_t lastPoll = 0;
-    if (millis() - lastPoll >= POLL_INTERVAL_MS) {
+    if (millis() - lastPoll >= appCfg.pollMs) {
         lastPoll = millis();
         fetchAndUpdate();
         render();
