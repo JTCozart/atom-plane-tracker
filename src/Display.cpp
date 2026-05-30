@@ -186,3 +186,27 @@ void Display::showMessage(const String& line1, const String& line2) {
         M5.Display.print(line2);
     }
 }
+
+void Display::showPollIntervalError(uint32_t currentMs, uint32_t minimumMs, int secondsRemaining) {
+    M5.Display.fillScreen(_colorRed);
+    M5.Display.setTextColor(_colorBlack, _colorRed);
+    M5.Display.setTextSize(1);
+
+    M5.Display.setCursor(2, 4);
+    M5.Display.print("POLL TOO FAST");
+
+    M5.Display.setCursor(2, 18);
+    M5.Display.printf("Set: %ums", currentMs);
+
+    M5.Display.setCursor(2, 30);
+    M5.Display.printf("Min: %ums", minimumMs);
+
+    M5.Display.setTextSize(1);
+    M5.Display.setCursor(2, 50);
+    M5.Display.print("Press btn to set");
+    M5.Display.setCursor(2, 62);
+    M5.Display.printf("min + reboot");
+
+    M5.Display.setCursor(2, 82);
+    M5.Display.printf("Auto-fix in %ds", secondsRemaining);
+}

@@ -49,8 +49,10 @@ void WebUI::handleRoot() {
             "<input name='lon' value='" + String(_cfg.longitude, 6) + "'>";
     html += "<label>Search Radius (nautical miles)</label>"
             "<input name='radius' value='" + String(_cfg.radius) + "'>";
-    html += "<label>Poll Interval (ms)</label>"
-            "<input name='poll' value='" + String(_cfg.pollIntervalMs) + "'>";
+    html += "<label>Poll Interval (ms) <small style='font-weight:normal'>— minimum " +
+            String(Config::kMinPollIntervalMs) + "ms</small></label>"
+            "<input name='poll' type='number' min='" + String(Config::kMinPollIntervalMs) +
+            "' value='" + String(_cfg.pollIntervalMs) + "'>";
     html += "<hr style='margin:18px 0'>";
     html += "<label>ntfy Token</label>"
             "<input name='ntfyToken' type='password' placeholder='leave blank to keep current'>";
@@ -81,8 +83,11 @@ void WebUI::handleSave() {
         prefs.putDouble("lon",    _server.arg("lon").toDouble());
     if (_server.hasArg("radius"))
         prefs.putFloat ("radius", _server.arg("radius").toFloat());
-    if (_server.hasArg("poll"))
-        prefs.putUInt  ("pollMs", (uint32_t)_server.arg("poll").toInt());
+    if (_server.hasArg("poll")) {
+        uint32_t pollValue = (uint32_t)max(0, _server.arg("poll").toInt());
+        if (pollValue < Config::kMinPollIntervalMs) pollValue = Config::kMinPollIntervalMs;
+        prefs.putUInt("pollMs", pollValue);
+    }
     if (_server.hasArg("ntfyToken") && _server.arg("ntfyToken").length() > 0)
         prefs.putString("ntfyToken",   _server.arg("ntfyToken"));
     if (_server.hasArg("ntfyTopic"))

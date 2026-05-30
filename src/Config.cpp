@@ -27,3 +27,11 @@ void Config::load() {
     strncpy(notifyClassFilter, prefs.getString("ntfyClasses", NTFY_CLASSES).c_str(), sizeof(notifyClassFilter) - 1);
     prefs.end();
 }
+
+void Config::savePollInterval(uint32_t ms) {
+    pollIntervalMs = ms;
+    Preferences prefs;
+    prefs.begin("plantracker", false);
+    prefs.putUInt("pollMs", ms);
+    prefs.end();
+}

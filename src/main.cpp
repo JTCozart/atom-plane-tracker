@@ -58,6 +58,37 @@ static bool connectToWifi() {
     return false;
 }
 
+// ── Poll interval validation ──────────────────────────────────────────────────
+
+static void validatePollInterval() {
+    if (config.pollIntervalMs >= Config::kMinPollIntervalMs) return;
+
+    const int kErrorTimeoutSeconds = 15;
+    uint32_t deadline = millis() + (uint32_t)kErrorTimeoutSeconds * 1000;
+    int lastSecond    = -1;
+
+    while (millis() < deadline) {
+        M5.update();
+        int remaining = (int)((deadline - millis()) / 1000);
+
+        if (remaining != lastSecond) {
+            lastSecond = remaining;
+            display.showPollIntervalError(config.pollIntervalMs,
+                                          Config::kMinPollIntervalMs,
+                                          remaining);
+        }
+
+        if (M5.BtnA.wasPressed()) {
+            config.savePollInterval(Config::kMinPollIntervalMs);
+            ESP.restart();
+        }
+        delay(50);
+    }
+
+    // Timeout — correct in memory and continue without rebooting
+    config.pollIntervalMs = Config::kMinPollIntervalMs;
+}
+
 // ── Render ────────────────────────────────────────────────────────────────────
 
 static void render() {
@@ -105,6 +136,7 @@ void setup() {
 
     display.begin();
     config.load();
+    validatePollInterval();
 
     if (!connectToWifi()) {
         webUI.begin(mode, true);   // AP mode: starts SoftAP + web server

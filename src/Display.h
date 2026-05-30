@@ -27,6 +27,10 @@ public:
     // Generic 2-line message on a black background (connecting, test-ntfy feedback, etc.)
     void showMessage(const String& line1, const String& line2 = "");
 
+    // Red error screen shown when poll interval is below the minimum.
+    // secondsRemaining: countdown until auto-correction (shown to user).
+    void showPollIntervalError(uint32_t currentMs, uint32_t minimumMs, int secondsRemaining);
+
     // Expose colors for WebUI color conversion
     uint16_t backgroundColorFor(AircraftClass cls) const { return _backgroundColors[toIndex(cls)]; }
     uint16_t foregroundColorFor(AircraftClass cls) const { return _foregroundColors[toIndex(cls)]; }
