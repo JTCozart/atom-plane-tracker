@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <map>
 #include <set>
+#include <vector>
 #include "secrets.h"
 
 // airplanes.live — free, no API key, ADSBExchange v2 format, radius in NM
@@ -16,7 +17,7 @@ static const uint32_t POLL_MS = 10000;
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 enum AcClass    { CLS_MIL = 0, CLS_MEDVAC, CLS_COMM, CLS_PRIV };
-enum ScreenMode { SCR_SCAN, SCR_HIST, SCR_SUM };
+enum ScreenMode { SCR_SCAN, SCR_HIST, SCR_SUM, SCR_DEBUG };
 
 struct Ac {
     String  icao;
@@ -28,11 +29,23 @@ struct Ac {
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-static ScreenMode           mode    = SCR_SCAN;
-static std::map<String, Ac> inRadius;       // ICAO → aircraft currently overhead
+static ScreenMode           mode       = SCR_SCAN;
+static ScreenMode           preDebug   = SCR_SCAN;   // mode to restore on debug exit
+static std::map<String, Ac> inRadius;
 static Ac                   lastAc;
-static bool                 hasHist = false;
-static int                  cnt[4]  = {0, 0, 0, 0};  // indexed by AcClass
+static bool                 hasHist    = false;
+static int                  cnt[4]     = {0, 0, 0, 0};
+
+// Debug state
+static std::vector<String>  debugLines;
+static int                  debugScroll  = 0;
+static int                  lastHttpCode = 0;
+static int                  lastAcTotal  = 0;
+
+// Long-press detection
+static uint32_t             btnDownAt      = 0;
+static bool                 longPressFired = false;
+static const uint32_t       LONG_PRESS_MS  = 800;
 
 // ── Classification ────────────────────────────────────────────────────────────
 
@@ -151,6 +164,38 @@ static void drawSummary() {
     M5.Display.setCursor(4, y); M5.Display.printf("Private:    %d", cnt[CLS_PRIV]);
 }
 
+static const int DBG_LINES_VISIBLE = 15;  // size-1 rows that fit below the header
+
+static void drawDebug() {
+    M5.Display.fillScreen(BLACK);
+    M5.Display.setTextColor(WHITE, BLACK);
+    M5.Display.setTextSize(1);
+
+    // Header row
+    M5.Display.setCursor(0, 0);
+    int total = (int)debugLines.size();
+    int maxScroll = (total > DBG_LINES_VISIBLE) ? (total - DBG_LINES_VISIBLE) : 0;
+    M5.Display.printf("DBG HTTP:%d ac:%d", lastHttpCode, lastAcTotal);
+
+    // Content lines
+    for (int i = 0; i < DBG_LINES_VISIBLE; i++) {
+        int li = debugScroll + i;
+        M5.Display.setCursor(0, 10 + i * 8);
+        if (li < total) {
+            // Truncate to 21 chars to stay on screen
+            String line = debugLines[li];
+            if (line.length() > 21) line = line.substring(0, 21);
+            M5.Display.print(line);
+        }
+    }
+
+    // Scroll indicator (bottom-right)
+    if (maxScroll > 0) {
+        M5.Display.setCursor(96, 120);
+        M5.Display.printf("%d/%d", debugScroll, maxScroll);
+    }
+}
+
 static void render() {
     if (!inRadius.empty()) {
         // Always show highest-priority live aircraft (lowest enum value wins)
@@ -160,9 +205,10 @@ static void render() {
         drawAcScreen(*best);
     } else {
         switch (mode) {
-            case SCR_SCAN: drawScan();                           break;
-            case SCR_HIST: drawAcScreen(lastAc, /*hist=*/true); break;
-            case SCR_SUM:  drawSummary();                        break;
+            case SCR_SCAN:  drawScan();                           break;
+            case SCR_HIST:  drawAcScreen(lastAc, /*hist=*/true); break;
+            case SCR_SUM:   drawSummary();                        break;
+            case SCR_DEBUG: drawDebug();                          break;
         }
     }
 }
@@ -203,15 +249,51 @@ static void fetchAndUpdate() {
     http.begin(client, url);
     http.setTimeout(8000);
 
-    if (http.GET() != 200) { http.end(); return; }
+    int httpCode = http.GET();
+    lastHttpCode = httpCode;
+    if (httpCode != 200) { http.end(); return; }
 
     JsonDocument doc;
     if (deserializeJson(doc, http.getStream())) { http.end(); return; }
     http.end();
 
+    // Rebuild debug lines from raw response
+    JsonArray acArr = doc["ac"].as<JsonArray>();
+    lastAcTotal = acArr.size();
+    debugLines.clear();
+    for (JsonObject plane : acArr) {
+        String icao = plane["hex"]      | "??????";  icao.toUpperCase();
+        String cs   = plane["flight"]   | "";        cs.trim();
+        String reg  = plane["r"]        | "";
+        String type = plane["t"]        | "??";
+        String cat  = plane["category"] | "?";
+        String own  = plane["ownOp"]    | "";
+        float  alt  = plane["alt_baro"] | 0.0f;
+        float  gs   = plane["gs"]       | 0.0f;
+        bool   mil  = (plane["mil"] | 0) != 0 || ((plane["dbFlags"] | 0) & 1) != 0;
+
+        char buf[48];
+        snprintf(buf, sizeof(buf), "%s %s %s", icao.c_str(),
+                 cs.length() ? cs.c_str() : reg.c_str(), type.c_str());
+        debugLines.push_back(buf);
+
+        snprintf(buf, sizeof(buf), " cat:%s mil:%c %5.0fft",
+                 cat.c_str(), mil ? 'Y' : 'N', alt);
+        debugLines.push_back(buf);
+
+        if (own.length()) {
+            debugLines.push_back(String(" ") + own);
+        }
+        debugLines.push_back("---");
+    }
+    if (debugLines.empty()) debugLines.push_back("No aircraft");
+
+    // Don't reset scroll if user is actively viewing debug
+    if (mode != SCR_DEBUG) debugScroll = 0;
+
     std::set<String> seen;
 
-    for (JsonObject plane : doc["ac"].as<JsonArray>()) {
+    for (JsonObject plane : acArr) {
         const char* hex = plane["hex"] | "";
         if (!hex || hex[0] == '\0') continue;
 
@@ -252,7 +334,7 @@ static void fetchAndUpdate() {
         }
     }
 
-    if (!anyLeft && inRadius.empty()) {
+    if (!anyLeft && inRadius.empty() && mode != SCR_DEBUG) {
         mode = SCR_SCAN;  // all aircraft gone, return to scanning
     }
 }
@@ -270,14 +352,39 @@ void setup() {
 void loop() {
     M5.update();
 
-    // Button cycles view — only when no aircraft is actively overhead
-    if (M5.BtnA.wasPressed() && inRadius.empty()) {
-        switch (mode) {
-            case SCR_SCAN: mode = hasHist ? SCR_HIST : SCR_SUM;  break;
-            case SCR_HIST: mode = SCR_SUM;                         break;
-            case SCR_SUM:  mode = SCR_SCAN;                        break;
+    // Long-press detection
+    if (M5.BtnA.wasPressed()) {
+        btnDownAt      = millis();
+        longPressFired = false;
+    }
+    if (M5.BtnA.isPressed() && !longPressFired &&
+        (millis() - btnDownAt >= LONG_PRESS_MS)) {
+        longPressFired = true;
+        if (mode == SCR_DEBUG) {
+            mode = preDebug;          // exit debug, restore previous screen
+        } else {
+            preDebug     = mode;      // remember where we came from
+            debugScroll  = 0;
+            mode         = SCR_DEBUG;
         }
         render();
+    }
+    if (M5.BtnA.wasReleased() && !longPressFired) {
+        // Short press: scroll in debug, or cycle screens elsewhere
+        if (mode == SCR_DEBUG) {
+            int maxScroll = (int)debugLines.size() - DBG_LINES_VISIBLE;
+            if (maxScroll < 0) maxScroll = 0;
+            debugScroll = (debugScroll >= maxScroll) ? 0 : debugScroll + DBG_LINES_VISIBLE;
+            render();
+        } else if (inRadius.empty()) {
+            switch (mode) {
+                case SCR_SCAN: mode = hasHist ? SCR_HIST : SCR_SUM; break;
+                case SCR_HIST: mode = SCR_SUM;                        break;
+                case SCR_SUM:  mode = SCR_SCAN;                       break;
+                default: break;
+            }
+            render();
+        }
     }
 
     static uint32_t lastPoll = 0;
