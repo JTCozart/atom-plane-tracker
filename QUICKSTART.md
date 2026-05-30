@@ -133,10 +133,10 @@ If you want your phone to notify you when aircraft pass overhead:
 
 ### About ntfy.sh (free service)
 
-- ✅ **Completely free** — no credit card required
-- ✅ **250 notifications per day** on the free tier — plenty for casual aircraft tracking
-- ℹ️ If you track aircraft very frequently and need more than 250/day, paid plans are available on ntfy.sh
-- 🔒 **Private topics** — use a unique topic name that no one else would guess
+- **Completely free** — no credit card required
+- **250 notifications per day** on the free tier — plenty for casual aircraft tracking
+- If you track aircraft very frequently and need more than 250/day, paid plans are available on ntfy.sh
+- **Private topics** — use a unique topic name that no one else would guess
 
 ### 8a. Create a ntfy.sh account
 
@@ -187,9 +187,9 @@ Now, whenever an aircraft enters your search radius, you'll get a notification o
 ## Step 9: You're done!
 
 The device is now:
-- ✅ Connected to your WiFi
-- ✅ Scanning for aircraft over your location
-- ✅ (Optional) Sending notifications to your phone
+- Connected to your WiFi
+- Scanning for aircraft over your location
+- (Optional) Sending notifications to your phone
 
 ### What to expect
 
@@ -242,4 +242,4 @@ If something isn't working, check the **debug screen** on the device (long-press
 - **Device IP address** for accessing the setup page
 - **Raw data** from the API response
 
-Good luck tracking! 🛩️
+Good luck tracking!
