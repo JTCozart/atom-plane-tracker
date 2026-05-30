@@ -131,12 +131,19 @@ The device will now start scanning for aircraft overhead!
 
 If you want your phone to notify you when aircraft pass overhead:
 
+### About ntfy.sh (free service)
+
+- ✅ **Completely free** — no credit card required
+- ✅ **250 notifications per day** on the free tier — plenty for casual aircraft tracking
+- ℹ️ If you track aircraft very frequently and need more than 250/day, paid plans are available on ntfy.sh
+- 🔒 **Private topics** — use a unique topic name that no one else would guess
+
 ### 8a. Create a ntfy.sh account
 
 1. Go to **https://ntfy.sh** on your phone
 2. You **don't need an account** — ntfy is anonymous and free
-3. But if you want to keep your topic private, create a topic name:
-   - Think of something **unique** that no one else would guess
+3. Create a **unique topic name** for your notifications:
+   - Think of something that no one else would guess
    - Example: `airplane-tracker-myname-12345`
    - Write it down — you'll need it twice
 
