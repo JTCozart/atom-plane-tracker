@@ -105,6 +105,13 @@ static int                  debugScroll  = 0;
 static int                  lastHttpCode = 0;
 static int                  lastAcTotal  = 0;
 
+// Forward declarations for web server handlers (defined after display section)
+static void handleRoot();
+static void handleSave();
+
+// Device IP — set after WiFi connect or AP start; shown on debug screen
+static String deviceIP = "0.0.0.0";
+
 // Long-press and double-click detection
 static uint32_t             btnDownAt        = 0;
 static bool                 longPressFired   = false;
@@ -464,7 +471,6 @@ static void sendTestNtfy() {
 
 static WebServer apServer(80);
 static bool      inAPMode  = false;
-static String    deviceIP  = "0.0.0.0";
 
 static void startWebServer() {
     apServer.on("/",     HTTP_GET,  handleRoot);
