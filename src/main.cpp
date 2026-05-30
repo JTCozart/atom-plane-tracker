@@ -323,25 +323,29 @@ static void drawSummary() {
     M5.Display.setCursor(4, y); M5.Display.printf("Private:    %d", cnt[CLS_PRIV]);
 }
 
-static const int DBG_LINES_VISIBLE = 15;  // size-1 rows that fit below the header
+static const int DBG_LINES_VISIBLE = 13;  // size-1 rows below the two-line header
+static const int DBG_CONTENT_Y     = 20;  // y offset where content starts
 
 static void drawDebug() {
     M5.Display.fillScreen(C_BLACK);
     M5.Display.setTextColor(C_WHITE, C_BLACK);
     M5.Display.setTextSize(1);
 
-    // Header row
+    // Header row 1 — HTTP status and aircraft count
     M5.Display.setCursor(0, 0);
-    int total = (int)debugLines.size();
-    int maxScroll = (total > DBG_LINES_VISIBLE) ? (total - DBG_LINES_VISIBLE) : 0;
     M5.Display.printf("DBG HTTP:%d ac:%d", lastHttpCode, lastAcTotal);
 
+    // Header row 2 — device IP (tap-able via browser for config)
+    M5.Display.setCursor(0, 10);
+    M5.Display.printf("IP: %s", deviceIP.c_str());
+
     // Content lines
+    int total     = (int)debugLines.size();
+    int maxScroll = max(0, total - DBG_LINES_VISIBLE);
     for (int i = 0; i < DBG_LINES_VISIBLE; i++) {
         int li = debugScroll + i;
-        M5.Display.setCursor(0, 10 + i * 8);
+        M5.Display.setCursor(0, DBG_CONTENT_Y + i * 8);
         if (li < total) {
-            // Truncate to 21 chars to stay on screen
             String line = debugLines[li];
             if (line.length() > 21) line = line.substring(0, 21);
             M5.Display.print(line);
@@ -459,7 +463,14 @@ static void sendTestNtfy() {
 // ── AP / config web server ────────────────────────────────────────────────────
 
 static WebServer apServer(80);
-static bool      inAPMode = false;
+static bool      inAPMode  = false;
+static String    deviceIP  = "0.0.0.0";
+
+static void startWebServer() {
+    apServer.on("/",     HTTP_GET,  handleRoot);
+    apServer.on("/save", HTTP_POST, handleSave);
+    apServer.begin();
+}
 
 static void handleRoot() {
     String html =
@@ -519,14 +530,11 @@ static void handleSave() {
 }
 
 static void startAPMode() {
-    inAPMode = true;
+    inAPMode  = true;
+    deviceIP  = "192.168.4.1";
     WiFi.mode(WIFI_AP);
     WiFi.softAP("PlaneTracker", "PlaneTracker");
-
-    apServer.on("/",     HTTP_GET,  handleRoot);
-    apServer.on("/save", HTTP_POST, handleSave);
-    apServer.begin();
-
+    startWebServer();
     drawAPMode();
 }
 
@@ -545,7 +553,10 @@ static bool connectWifi() {
     for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) delay(500);
 
     if (WiFi.status() == WL_CONNECTED) {
+        deviceIP = WiFi.localIP().toString();
+        startWebServer();
         M5.Display.println("Connected!");
+        M5.Display.println(deviceIP.c_str());
         delay(800);
         return true;
     }
@@ -710,6 +721,7 @@ void loop() {
     }
 
     M5.update();
+    apServer.handleClient();
 
     // Idle timeout — return to SCAN after 30s of no interaction on HIST/SUM
     if ((mode == SCR_HIST || mode == SCR_SUM) &&
