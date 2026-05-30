@@ -96,53 +96,74 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
     M5.Display.fillScreen(_backgroundColors[toIndex(cls)]);
     M5.Display.setTextColor(_foregroundColors[toIndex(cls)], _backgroundColors[toIndex(cls)]);
 
-    // Row 0 — class label
-    M5.Display.setTextSize(1);
-    M5.Display.setCursor(2, 2);
-    M5.Display.print(aircraftClassName(cls));
-
-    // Row 1-2 — callsign, large
-    M5.Display.setTextSize(2);
-    M5.Display.setCursor(2, 14);
+    // Row 1-2 — callsign, extra large
+    M5.Display.setTextSize(3);
+    M5.Display.setCursor(2, 8);
     String cs = aircraft.callsign.length() ? aircraft.callsign : "N/A";
-    if (cs.length() > 10) cs = cs.substring(0, 10);
+    if (cs.length() > 8) cs = cs.substring(0, 8);
     M5.Display.print(cs);
 
     // Row 3 — type
-    M5.Display.setTextSize(1);
+    M5.Display.setTextSize(1.5);
     M5.Display.setCursor(2, 34);
     M5.Display.print("Type: ");
     M5.Display.print(aircraft.type.length() ? aircraft.type : "???");
 
     // Row 4 — altitude
-    M5.Display.setCursor(2, 46);
+    M5.Display.setTextSize(1.5);
+    M5.Display.setCursor(2, 47);
     if (aircraft.altitude > 0) {
-        M5.Display.printf("Alt:  %.0f ft", aircraft.altitude);
+        M5.Display.printf("Alt:  %.0f", aircraft.altitude);
     } else {
-        M5.Display.print("Alt:  ground");
+        M5.Display.print("Alt: GND");
     }
 
     // Row 5 — ETA until leaving radius (live only, not history)
     if (!isHistorical) {
-        M5.Display.setCursor(2, 58);
+        M5.Display.setTextSize(1.5);
+        M5.Display.setCursor(2, 60);
         if (etaSeconds < 0) {
-            M5.Display.print("ETA:  --:--");
+            M5.Display.print("ETA: --:--");
         } else {
             int elapsed = (int)((millis() - aircraft.positionTimestamp) / 1000);
             int eta = max(0, etaSeconds - elapsed);
-            M5.Display.printf("ETA:  %d:%02d", eta / 60, eta % 60);
+            M5.Display.printf("ETA: %d:%02d", eta / 60, eta % 60);
         }
     }
 
-    // History bar — red strip across the bottom with entry counter
+    // Bottom banner
     if (isHistorical) {
-        M5.Display.fillRect(0, 116, 128, 12, _colorRed);
+        // Classification tag — aircraft type above history counter
+        uint16_t tagColor = M5.Display.color565(64, 64, 64);
+        M5.Display.fillRect(0, 93, 128, 17, tagColor);
+        M5.Display.setTextColor(_colorWhite, tagColor);
+        M5.Display.setTextSize(2);
+        const char* typeStr = aircraftClassName(aircraft.classification);
+        int textWidth = (int)strlen(typeStr) * 12;
+        int x = max(0, (128 - textWidth) / 2);
+        M5.Display.setCursor(x, 93);
+        M5.Display.print(typeStr);
+
+        // History counter — red strip with entry counter, extends to edge
+        M5.Display.fillRect(0, 110, 128, 20, _colorRed);
         M5.Display.setTextColor(_colorWhite, _colorRed);
-        char bar[24];
-        snprintf(bar, sizeof(bar), "[ HIST %d/%d ]", historyIndex + 1, historyCount);
-        int x = max(0, (128 - (int)strlen(bar) * 6) / 2);
-        M5.Display.setCursor(x, 118);
+        M5.Display.setTextSize(1);
+        char bar[16];
+        snprintf(bar, sizeof(bar), "[ %d/%d ]", historyIndex + 1, historyCount);
+        int histX = max(0, (128 - (int)strlen(bar) * 6) / 2);
+        M5.Display.setCursor(histX, 115);
         M5.Display.print(bar);
+    } else {
+        // Classification banner — dark gray strip showing aircraft type, extends to edge
+        uint16_t bannerColor = M5.Display.color565(64, 64, 64);
+        M5.Display.fillRect(0, 106, 128, 25, bannerColor);
+        M5.Display.setTextColor(_colorWhite, bannerColor);
+        M5.Display.setTextSize(2);
+        const char* typeStr = aircraftClassName(aircraft.classification);
+        int textWidth = (int)strlen(typeStr) * 12;
+        int x = max(0, (128 - textWidth) / 2);
+        M5.Display.setCursor(x, 111);
+        M5.Display.print(typeStr);
     }
 }
 
@@ -155,7 +176,7 @@ void Display::showSummary(int militaryCount, int medevacCount, int commercialCou
     M5.Display.setCursor(8, 4);
     M5.Display.print("SUMMARY");
 
-    M5.Display.setTextSize(1);
+    M5.Display.setTextSize(1.5);
     int y = 38;
     M5.Display.setCursor(4, y); M5.Display.printf("Military:   %d", militaryCount);   y += 14;
     M5.Display.setCursor(4, y); M5.Display.printf("Medevac:    %d", medevacCount);    y += 14;
