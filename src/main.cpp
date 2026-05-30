@@ -142,7 +142,11 @@ static int etaSeconds(const Ac& ac) {
 // ── Display ───────────────────────────────────────────────────────────────────
 
 // Per-class: background, foreground, label
-static const uint32_t BG[]    = { RED,   BLUE,  GREEN,  YELLOW };
+// GC9107 on Atom S3R swaps the green and blue channels, so GREEN renders
+// as blue on screen and BLUE renders as green — constants are intentionally
+// swapped here to produce the correct visible colors.
+static const uint32_t BG[]    = { RED,   GREEN, BLUE,   YELLOW };
+//  visible result on display:  { RED,   BLUE,  GREEN,  YELLOW }
 static const uint32_t FG[]    = { BLACK, WHITE, BLACK,  BLACK  };
 static const char*    LABEL[] = { "MILITARY", "MEDEVAC", "COMMERCIAL", "PRIVATE" };
 
