@@ -49,7 +49,7 @@ void WebUI::handleRoot() {
             "<input name='lon' value='" + String(_cfg.longitude, 6) + "'>";
     html += "<label>Search Radius (nautical miles)</label>"
             "<input name='radius' value='" + String(_cfg.radius) + "'>";
-    html += "<label>Poll Interval (ms) <small style='font-weight:normal'>&mdash;minimum " +
+    html += "<label>Poll Interval (ms) <small style='font-weight:normal'> - minimum " +
             String(Config::kMinPollIntervalMs) + "ms</small></label>"
             "<input name='poll' type='number' min='" + String(Config::kMinPollIntervalMs) +
             "' value='" + String(_cfg.pollIntervalMs) + "'>";
@@ -58,7 +58,7 @@ void WebUI::handleRoot() {
             "<input name='ntfyToken' type='password' placeholder='leave blank to keep current'>";
     html += "<label>ntfy Topic</label>"
             "<input name='ntfyTopic' value='" + String(_cfg.notifyTopic) + "'>";
-    html += "<label>ntfy Classes <small style='font-weight:normal'>(comma-separated: MIL, MEDVAC, COMM, PRIV &mdash;empty&nbsp;=&nbsp;all)</small></label>"
+    html += "<label>ntfy Classes <small style='font-weight:normal'>(comma-separated: MIL, MEDVAC, COMM, PRIV - empty&nbsp;=&nbsp;all)</small></label>"
             "<input name='ntfyClasses' value='" + String(_cfg.notifyClassFilter) + "' placeholder='empty = all classes'>";
     html += "<button type='submit'>Save &amp; Reboot</button>"
             "</form>"
@@ -147,16 +147,6 @@ void WebUI::handleScreen() {
                 snprintf(buf, sizeof(buf), "ETA:  %d:%02d", eta / 60, eta % 60);
                 inner += "<div>" + String(buf) + "</div>";
             }
-        }
-
-        int ownerY = hist ? 0 : 4;
-        inner += "<div style='margin-top:" + String(ownerY) + "px'>Owner:</div>";
-        String owner = ac.owner.length() ? ac.owner : "Unknown";
-        if (owner.length() > 21) {
-            inner += "<div>" + owner.substring(0, 21) + "</div>";
-            inner += "<div>" + owner.substring(21, 42) + "</div>";
-        } else {
-            inner += "<div>" + owner + "</div>";
         }
 
         if (hist) {

@@ -134,20 +134,6 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
         }
     }
 
-    // Row 6-7 — owner (up to two lines of 21 chars each)
-    int ownerY = isHistorical ? 58 : 70;
-    M5.Display.setCursor(2, ownerY);
-    M5.Display.print("Owner:");
-    String owner = aircraft.owner.length() ? aircraft.owner : "Unknown";
-    M5.Display.setCursor(2, ownerY + 12);
-    if (owner.length() <= 21) {
-        M5.Display.print(owner);
-    } else {
-        M5.Display.print(owner.substring(0, 21));
-        M5.Display.setCursor(2, ownerY + 24);
-        M5.Display.print(owner.substring(21, 42));
-    }
-
     // History bar — red strip across the bottom with entry counter
     if (isHistorical) {
         M5.Display.fillRect(0, 116, 128, 12, _colorRed);

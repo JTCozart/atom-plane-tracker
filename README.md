@@ -17,7 +17,7 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 | Commercial | Green | Black | ADS-B category A3/A4/A5 or ICAO airline code pattern |
 | Private / Other | Yellow | Black | Everything else |
 
-- Detection screen shows **callsign**, **aircraft type**, **altitude**, **ETA until leaving radius**, and **owner/operator**.
+- Detection screen shows **callsign**, **aircraft type**, **altitude**, and **ETA until leaving radius**.
 - ETA counts down in real time between API polls using the aircraft's last known position, speed, and track.
 - If multiple aircraft are overhead simultaneously the display cycles between them every 5 seconds.
 - When all aircraft leave the radius the screen returns to **SCANNING**.
@@ -64,7 +64,7 @@ D4E5F6 N12345 C172
 
 - **Line 1** — last HTTP status code and total aircraft count returned by the API.
 - **Line 2** — device IP address on the local network (see [Configuration web UI](#configuration-web-ui)).
-- **Per aircraft** — ICAO hex, callsign or registration, ICAO type code, ADS-B category, military flag (`Y`/`N`), barometric altitude, and owner/operator.
+- **Per aircraft** — ICAO hex, callsign or registration, ICAO type code, ADS-B category, military flag (`Y`/`N`), and barometric altitude.
 - **Short press** — scrolls down 13 lines at a time, wraps to top.
 - **Double short press** (two taps within 400 ms) — sends a test ntfy notification and displays the HTTP response code for 1.5 seconds. Shows `ntfy not configured` if `NTFY_TOPIC` is empty.
 - Scroll position is preserved while in debug. Aircraft arrivals and departures do not exit debug mode.

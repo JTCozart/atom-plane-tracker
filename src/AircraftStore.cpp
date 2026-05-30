@@ -89,10 +89,6 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
         snprintf(buf, sizeof(buf), " cat:%s mil:%c %5.0fft",
                  cat.c_str(), mil ? 'Y' : 'N', alt);
         _apiResponseLines.push_back(buf);
-
-        if (own.length()) {
-            _apiResponseLines.push_back(String(" ") + own);
-        }
         _apiResponseLines.push_back("---");
     }
     if (_apiResponseLines.empty()) _apiResponseLines.push_back("No aircraft");
