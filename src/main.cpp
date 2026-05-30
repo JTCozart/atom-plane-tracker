@@ -57,10 +57,12 @@ static int                  debugScroll  = 0;
 static int                  lastHttpCode = 0;
 static int                  lastAcTotal  = 0;
 
-// Long-press detection
-static uint32_t             btnDownAt      = 0;
-static bool                 longPressFired = false;
-static const uint32_t       LONG_PRESS_MS  = 800;
+// Long-press and double-click detection
+static uint32_t             btnDownAt        = 0;
+static bool                 longPressFired   = false;
+static const uint32_t       LONG_PRESS_MS    = 800;
+static uint32_t             lastClickMs      = 0;
+static const uint32_t       DOUBLE_CLICK_MS  = 400;
 
 // ── Classification ────────────────────────────────────────────────────────────
 
@@ -338,6 +340,40 @@ static void sendNtfy(const Ac& ac) {
     http.end();
 }
 
+static void sendTestNtfy() {
+    if (strlen(NTFY_TOKEN) == 0 || strlen(NTFY_TOPIC) == 0) {
+        M5.Display.fillScreen(C_BLACK);
+        M5.Display.setTextColor(C_WHITE, C_BLACK);
+        M5.Display.setTextSize(1);
+        M5.Display.setCursor(2, 56);
+        M5.Display.print("ntfy not configured");
+        delay(1500);
+        return;
+    }
+
+    M5.Display.fillScreen(C_BLACK);
+    M5.Display.setTextColor(C_WHITE, C_BLACK);
+    M5.Display.setTextSize(1);
+    M5.Display.setCursor(2, 56);
+    M5.Display.print("Sending test...");
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, String("https://ntfy.sh/") + NTFY_TOPIC);
+    http.addHeader("Authorization", String("Bearer ") + NTFY_TOKEN);
+    http.addHeader("Content-Type",  "text/plain");
+    http.addHeader("Title",    "atom-plane-tracker test");
+    http.addHeader("Priority", "default");
+    http.addHeader("Tags",     "white_check_mark");
+    int code = http.POST("Test notification from atom-plane-tracker");
+    http.end();
+
+    M5.Display.setCursor(2, 70);
+    M5.Display.printf("HTTP %d", code);
+    delay(1500);
+}
+
 // ── WiFi ──────────────────────────────────────────────────────────────────────
 
 static void connectWifi() {
@@ -521,9 +557,16 @@ void loop() {
         lastInteractMs = millis();
         // Short press: scroll in debug, or cycle screens
         if (mode == SCR_DEBUG) {
-            int maxScroll = (int)debugLines.size() - DBG_LINES_VISIBLE;
-            if (maxScroll < 0) maxScroll = 0;
-            debugScroll = (debugScroll >= maxScroll) ? 0 : debugScroll + DBG_LINES_VISIBLE;
+            uint32_t now = millis();
+            if (now - lastClickMs <= DOUBLE_CLICK_MS) {
+                lastClickMs = 0;  // reset so triple-click doesn't re-trigger
+                sendTestNtfy();
+            } else {
+                lastClickMs = now;
+                int maxScroll = (int)debugLines.size() - DBG_LINES_VISIBLE;
+                if (maxScroll < 0) maxScroll = 0;
+                debugScroll = (debugScroll >= maxScroll) ? 0 : debugScroll + DBG_LINES_VISIBLE;
+            }
         } else {
             switch (mode) {
                 case SCR_SCAN: mode = hasHist ? SCR_HIST : SCR_SUM; break;
