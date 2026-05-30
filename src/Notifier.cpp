@@ -29,12 +29,11 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     }
 
     String cs = aircraft.callsign.length() ? aircraft.callsign : (aircraft.type.length() ? aircraft.type : "Unknown");
-    char body[160];
-    snprintf(body, sizeof(body), "%s (%s) at %.0f ft\nOwner: %s",
+    char body[128];
+    snprintf(body, sizeof(body), "%s (%s) at %.0f ft",
              cs.c_str(),
              aircraft.type.length() ? aircraft.type.c_str() : "???",
-             aircraft.altitude,
-             aircraft.owner.length() ? aircraft.owner.c_str() : "Unknown");
+             aircraft.altitude);
 
     WiFiClientSecure client;
     client.setInsecure();
