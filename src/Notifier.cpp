@@ -35,8 +35,9 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
              aircraft.type.length() ? aircraft.type.c_str() : "???",
              aircraft.altitude);
 
-    // FlightRadar24 link by ICAO hex
-    String fr24Url = "https://www.flightradar24.com/" + aircraft.icao;
+    // FlightRadar24 link by tail number (registration) — fall back to ICAO if not available
+    String fr24Url = "https://www.flightradar24.com/" +
+                     (aircraft.registration.length() ? aircraft.registration : aircraft.icao);
 
     WiFiClientSecure client;
     client.setInsecure();

@@ -130,13 +130,14 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
         String callsign = cs_raw;
         callsign.trim();
 
-        String type  = plane["t"]        | "";
-        String owner = plane["ownOp"]    | "";
-        String cat   = plane["category"] | "";
+        String registration = plane["r"]        | "";
+        String type         = plane["t"]        | "";
+        String owner        = plane["ownOp"]    | "";
+        String cat          = plane["category"] | "";
 
         AircraftClass classification = Aircraft::classify(callsign, owner, milFlag, cat);
 
-        Aircraft aircraft = { icao, callsign, type, owner, alt, lat, lon, gs, track, millis(), classification };
+        Aircraft aircraft = { icao, callsign, registration, type, owner, alt, lat, lon, gs, track, millis(), classification };
         _activeAircraft[icao] = aircraft;
         _detectionCounts[toIndex(classification)]++;
         recordInHistory(aircraft);

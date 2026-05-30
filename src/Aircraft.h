@@ -10,6 +10,7 @@ inline int toIndex(AircraftClass cls) { return static_cast<int>(cls); }
 struct Aircraft {
     String   icao;
     String   callsign;
+    String   registration;  // tail number (aircraft identifier)
     String   type;
     String   owner;
     float    altitude;
