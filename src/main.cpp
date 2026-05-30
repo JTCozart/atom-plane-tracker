@@ -64,43 +64,42 @@ static const uint32_t       LONG_PRESS_MS  = 800;
 
 // ── Classification ────────────────────────────────────────────────────────────
 
-static const char* MIL_PFX[] = {
-    "AFA","RCH","NAF","CMF","AAM","CGD","PAT","DUKE",
-    "HUNT","JAKE","VALOR","SAM","VENUS","EVAC", nullptr
-};
+// FAA LIFEGUARD prefix is a regulated designation — safe to match on callsign.
+// All other classification comes from the API's own fields.
 static const char* MEDVAC_CS[] = {
-    "LIFEGRD","MEDVAC","AIRLIFE","AIRLFE","LIFEFL", nullptr
+    "LIFEGRD", "MEDVAC", "AIRLIFE", nullptr
 };
 static const char* MEDVAC_OP[] = {
-    "AIR LIFE","AIR METHODS","MEDEVAC","PHI AIR","METRO AVIA",
-    "OMNIFLIGHT","GUARDIAN FL", nullptr
+    "AIR LIFE", "AIR METHODS", "PHI AIR", "METRO AVIA",
+    "OMNIFLIGHT", "GUARDIAN FL", nullptr
 };
 
-static bool startsWith(const String& s, const char** list) {
+static bool startsWithAny(const String& s, const char** list) {
     for (; *list; list++) if (s.startsWith(*list)) return true;
     return false;
 }
-static bool contains(const String& s, const char** list) {
+static bool containsAny(const String& s, const char** list) {
     for (; *list; list++) if (s.indexOf(*list) >= 0) return true;
     return false;
 }
 
 static AcClass classify(const String& callsign, const String& owner,
                          bool milFlag, const String& cat) {
+    // Military: API flags only — no callsign guessing to avoid false positives
     if (milFlag) return CLS_MIL;
 
     String cs = callsign; cs.toUpperCase();
     String op = owner;    op.toUpperCase();
 
-    if (startsWith(cs, MIL_PFX))  return CLS_MIL;
-    if (startsWith(cs, MEDVAC_CS)) return CLS_MEDVAC;
-    if (contains(op, MEDVAC_OP))   return CLS_MEDVAC;
+    // Medevac: FAA LIFEGUARD callsign prefix or known operator
+    if (startsWithAny(cs, MEDVAC_CS)) return CLS_MEDVAC;
+    if (containsAny(op, MEDVAC_OP))   return CLS_MEDVAC;
 
-    // Large aircraft categories (A3=large, A4=high-vortex, A5=heavy)
+    // Commercial: API category A3=large, A4=high-vortex (B757), A5=heavy
     if (cat == "A3" || cat == "A4" || cat == "A5") return CLS_COMM;
 
-    // ICAO airline code pattern: 3 alpha + digits (e.g. UAL123, DAL456)
-    if (cs.length() >= 5 &&
+    // Commercial: standard ICAO airline designator pattern (e.g. DAL123, UAL456)
+    if (cs.length() >= 5 && cs.length() <= 8 &&
         isAlpha(cs[0]) && isAlpha(cs[1]) && isAlpha(cs[2]) && isDigit(cs[3]))
         return CLS_COMM;
 
