@@ -13,7 +13,7 @@
 // Fallback: "https://api.adsb.one/v2/point/%.6f/%.6f/%.1f"
 static const char* API_FMT = "https://api.adsb.lol/v2/lat/%.6f/lon/%.6f/dist/%.1f";
 
-static const uint32_t POLL_MS = 30000;
+// Poll interval defined in secrets.h as POLL_INTERVAL_MS
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -141,18 +141,33 @@ static int etaSeconds(const Ac& ac) {
 
 // ── Display ───────────────────────────────────────────────────────────────────
 
-// Per-class: background, foreground, label
-// GC9107 on Atom S3R swaps the green and blue channels, so GREEN renders
-// as blue on screen and BLUE renders as green — constants are intentionally
-// swapped here to produce the correct visible colors.
-static const uint32_t BG[]    = { RED,   GREEN, BLUE,   YELLOW };
-//  visible result on display:  { RED,   BLUE,  GREEN,  YELLOW }
-static const uint32_t FG[]    = { BLACK, WHITE, BLACK,  BLACK  };
-static const char*    LABEL[] = { "MILITARY", "MEDEVAC", "COMMERCIAL", "PRIVATE" };
+// All colors are uint16_t RGB565 values produced by color565() at runtime.
+// Using named constants (RED, GREEN, etc.) was causing wrong colors because
+// those macros are 16-bit RGB565 values misread as 24-bit RGB888 by LGFX.
+static uint16_t C_BLACK, C_WHITE, C_RED;
+static uint16_t BG[4];   // per AcClass background
+static uint16_t FG[4];   // per AcClass foreground text
+static const char* LABEL[] = { "MILITARY", "MEDEVAC", "COMMERCIAL", "PRIVATE" };
+
+static void initColors() {
+    C_BLACK = M5.Display.color565(0,   0,   0);
+    C_WHITE = M5.Display.color565(255, 255, 255);
+    C_RED   = M5.Display.color565(255, 0,   0);
+
+    BG[CLS_MIL]    = M5.Display.color565(255, 0,   0);    // red
+    BG[CLS_MEDVAC] = M5.Display.color565(0,   0,   255);  // blue
+    BG[CLS_COMM]   = M5.Display.color565(0,   255, 0);    // green
+    BG[CLS_PRIV]   = M5.Display.color565(255, 255, 0);    // yellow
+
+    FG[CLS_MIL]    = C_BLACK;
+    FG[CLS_MEDVAC] = C_WHITE;
+    FG[CLS_COMM]   = C_BLACK;
+    FG[CLS_PRIV]   = C_BLACK;
+}
 
 static void drawScan() {
-    M5.Display.fillScreen(BLACK);
-    M5.Display.setTextColor(WHITE, BLACK);
+    M5.Display.fillScreen(C_BLACK);
+    M5.Display.setTextColor(C_WHITE, C_BLACK);
     M5.Display.setTextSize(2);
     // Center "SCANNING" — each char 12px wide, 8 chars = 96px; (128-96)/2 = 16
     M5.Display.setCursor(16, 56);
@@ -217,16 +232,16 @@ static void drawAcScreen(const Ac& ac, bool hist = false) {
 
     // History bar — red strip across the bottom
     if (hist) {
-        M5.Display.fillRect(0, 116, 128, 12, RED);
-        M5.Display.setTextColor(WHITE, RED);
+        M5.Display.fillRect(0, 116, 128, 12, C_RED);
+        M5.Display.setTextColor(C_WHITE, C_RED);
         M5.Display.setCursor(30, 118);
         M5.Display.print("[ HISTORY ]");
     }
 }
 
 static void drawSummary() {
-    M5.Display.fillScreen(BLACK);
-    M5.Display.setTextColor(WHITE, BLACK);
+    M5.Display.fillScreen(C_BLACK);
+    M5.Display.setTextColor(C_WHITE, C_BLACK);
     M5.Display.setTextSize(2);
     M5.Display.setCursor(8, 4);
     M5.Display.print("SUMMARY");
@@ -242,8 +257,8 @@ static void drawSummary() {
 static const int DBG_LINES_VISIBLE = 15;  // size-1 rows that fit below the header
 
 static void drawDebug() {
-    M5.Display.fillScreen(BLACK);
-    M5.Display.setTextColor(WHITE, BLACK);
+    M5.Display.fillScreen(C_BLACK);
+    M5.Display.setTextColor(C_WHITE, C_BLACK);
     M5.Display.setTextSize(1);
 
     // Header row
@@ -291,8 +306,8 @@ static void render() {
 // ── WiFi ──────────────────────────────────────────────────────────────────────
 
 static void connectWifi() {
-    M5.Display.fillScreen(BLACK);
-    M5.Display.setTextColor(WHITE, BLACK);
+    M5.Display.fillScreen(C_BLACK);
+    M5.Display.setTextColor(C_WHITE, C_BLACK);
     M5.Display.setTextSize(1);
     M5.Display.setCursor(0, 0);
     M5.Display.println("Connecting WiFi...");
@@ -425,10 +440,30 @@ static void fetchAndUpdate() {
 
 // ── Entry points ──────────────────────────────────────────────────────────────
 
+static void colorTest() {
+    struct { uint16_t bg; uint16_t fg; const char* name; } tests[] = {
+        { M5.Display.color565(255, 0,   0),   C_BLACK, "RED"    },
+        { M5.Display.color565(0,   255, 0),   C_BLACK, "GREEN"  },
+        { M5.Display.color565(0,   0,   255), C_WHITE, "BLUE"   },
+        { M5.Display.color565(255, 255, 0),   C_BLACK, "YELLOW" },
+    };
+    for (auto& t : tests) {
+        M5.Display.fillScreen(t.bg);
+        M5.Display.setTextColor(t.fg, t.bg);
+        M5.Display.setTextSize(2);
+        M5.Display.setCursor(4, 56);
+        M5.Display.print(t.name);
+        delay(800);
+    }
+    M5.Display.fillScreen(C_BLACK);
+}
+
 void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
 
+    initColors();
+    colorTest();
     connectWifi();
     drawScan();
     fetchAndUpdate();
@@ -500,7 +535,7 @@ void loop() {
     }
 
     static uint32_t lastPoll = 0;
-    if (millis() - lastPoll >= POLL_MS) {
+    if (millis() - lastPoll >= POLL_INTERVAL_MS) {
         lastPoll = millis();
         fetchAndUpdate();
         render();
