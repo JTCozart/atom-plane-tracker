@@ -7,7 +7,7 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 ## What it does
 
 - Connects to a pre-configured WiFi network on boot and immediately polls for aircraft.
-- Polls [adsb.lol](https://adsb.lol) every 15 seconds (configurable) for aircraft within a stored radius of a fixed coordinate.
+- Polls [adsb.lol](https://adsb.lol) for aircraft within a configurable radius of a fixed coordinate (poll interval is adjustable).
 - Classifies each aircraft and changes the screen color accordingly:
 
 | Class | Background | Text | Basis |
@@ -26,7 +26,7 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 
 ## Screen navigation
 
-Short press of the button cycles through three screens. This works at any time — including while aircraft are overhead.
+Short press of the button cycles through three screens at any time — including while aircraft are overhead.
 
 ```
 SCANNING  →  HISTORY  →  SUMMARY  →  SCANNING  → ...
@@ -35,7 +35,7 @@ SCANNING  →  HISTORY  →  SUMMARY  →  SCANNING  → ...
 | Screen | Description |
 |---|---|
 | **SCANNING** | Black screen with "SCANNING". When aircraft are overhead this shows the live detection screen instead. |
-| **HISTORY** | Last 5 detected aircraft. Each press advances to the next older entry (`[ HIST 1/3 ]` shown in the red bar). After the last entry one more press moves to SUMMARY. |
+| **HISTORY** | Last 5 detected aircraft. Each press advances to the next older entry — `[ HIST 1/5 ]` counter shown in the red bar at the bottom. After the last entry one more press moves to SUMMARY. |
 | **SUMMARY** | Session totals by class (Military, Medevac, Commercial, Private). |
 
 - A new aircraft detected while on HISTORY or SUMMARY interrupts to the live view and returns to SCANNING when it leaves.
@@ -47,10 +47,11 @@ SCANNING  →  HISTORY  →  SUMMARY  →  SCANNING  → ...
 
 **Long press (0.8 s)** on the button from any screen enters debug mode. Long press again to exit and return to the previous screen.
 
-The debug screen shows raw data from the last API response:
+The debug screen shows the device IP address and raw data from the last API response:
 
 ```
 DBG HTTP:200 ac:7
+IP: 192.168.1.42
 A1B2C3 UAL123 B738
  cat:A3 mil:N 35000ft
  United Airlines
@@ -58,14 +59,49 @@ A1B2C3 UAL123 B738
 D4E5F6 N12345 C172
  cat:A1 mil:N  2500ft
 ---
-                4/12
+                3/10
 ```
 
-- **Header** — last HTTP status code and total aircraft count in the API response.
+- **Line 1** — last HTTP status code and total aircraft count returned by the API.
+- **Line 2** — device IP address on the local network (see [Configuration web UI](#configuration-web-ui)).
 - **Per aircraft** — ICAO hex, callsign or registration, ICAO type code, ADS-B category, military flag (`Y`/`N`), barometric altitude, and owner/operator.
-- **Short press** — scrolls down 15 lines at a time, wraps to top.
+- **Short press** — scrolls down 13 lines at a time, wraps to top.
 - **Double short press** (two taps within 400 ms) — sends a test ntfy notification and displays the HTTP response code for 1.5 seconds. Shows `ntfy not configured` if `NTFY_TOPIC` is empty.
 - Scroll position is preserved while in debug. Aircraft arrivals and departures do not exit debug mode.
+
+---
+
+## Configuration web UI
+
+The device runs a built-in web server that lets you update settings without reflashing.
+
+### First run / unconfigured
+
+If WiFi connection fails (wrong credentials or blank `secrets.h`), the device starts a setup access point:
+
+| | |
+|---|---|
+| **SSID** | `PlaneTracker` |
+| **Password** | `PlaneTracker` |
+| **URL** | `http://192.168.4.1` |
+
+The screen shows `SETUP MODE` with the connection details.
+
+### While running on WiFi
+
+Once connected the web server stays active on the device's normal IP address. Open a browser on any device on the same network and go to the IP shown on the debug screen (e.g. `http://192.168.1.42`).
+
+Both modes serve the same form:
+
+| Field | Description |
+|---|---|
+| WiFi SSID | Network name |
+| WiFi Password | Leave blank to keep the current password |
+| Latitude / Longitude | Center point for aircraft queries (decimal degrees) |
+| Search Radius (NM) | Query radius in nautical miles |
+| Poll Interval (ms) | How often to call the API |
+
+Submitting saves all values to on-device flash (NVS) and reboots. **NVS values take priority over `secrets.h`** on every subsequent boot. To reset to `secrets.h` defaults, submit the form with the desired values or erase NVS via the Arduino Preferences API.
 
 ---
 
@@ -80,7 +116,16 @@ The firmware can send push notifications via [ntfy.sh](https://ntfy.sh) when an 
 | Commercial | Default | ✈️ |
 | Private | Low | 🛩️ |
 
-Configure `NTFY_TOKEN` and `NTFY_TOPIC` in `secrets.h`. Leave `NTFY_TOPIC` as an empty string to disable notifications entirely.
+Configure in `secrets.h`:
+
+```cpp
+#define NTFY_TOKEN   "your-access-token"
+#define NTFY_TOPIC   "your-topic-name"
+// Comma-separated filter: MIL, MEDVAC, COMM, PRIV — empty = all classes
+#define NTFY_CLASSES "MIL,MEDVAC"
+```
+
+Leave `NTFY_TOPIC` empty to disable notifications entirely. The double-press test on the debug screen is useful for verifying your token and topic are correct.
 
 ---
 
@@ -117,7 +162,7 @@ cd atom-plane-tracker
 cp include/secrets.h.example include/secrets.h
 ```
 
-Edit `include/secrets.h`:
+Edit `include/secrets.h` with your defaults. These values are used on first boot and as fallbacks if NVS is empty:
 
 ```cpp
 #define WIFI_SSID        "YourNetworkName"
@@ -127,11 +172,12 @@ Edit `include/secrets.h`:
 #define QUERY_LON        -84.0000   // decimal degrees, negative = West
 #define QUERY_RADIUS_NM   5.0       // nautical miles (5 NM ≈ 5.75 statute miles)
 
-#define POLL_INTERVAL_MS  15000     // API poll interval in milliseconds
+#define POLL_INTERVAL_MS  15000     // milliseconds between API polls
 
-// Optional — leave NTFY_TOPIC empty to disable
-#define NTFY_TOKEN  "your-ntfy-access-token"
-#define NTFY_TOPIC  "your-topic-name"
+// Optional ntfy notifications — leave NTFY_TOPIC empty to disable
+#define NTFY_TOKEN   "your-ntfy-access-token"
+#define NTFY_TOPIC   "your-topic-name"
+#define NTFY_CLASSES ""             // empty = all classes
 ```
 
 > `secrets.h` is listed in `.gitignore` and will never be committed.
