@@ -440,30 +440,12 @@ static void fetchAndUpdate() {
 
 // ── Entry points ──────────────────────────────────────────────────────────────
 
-static void colorTest() {
-    struct { uint16_t bg; uint16_t fg; const char* name; } tests[] = {
-        { M5.Display.color565(255, 0,   0),   C_BLACK, "RED"    },
-        { M5.Display.color565(0,   255, 0),   C_BLACK, "GREEN"  },
-        { M5.Display.color565(0,   0,   255), C_WHITE, "BLUE"   },
-        { M5.Display.color565(255, 255, 0),   C_BLACK, "YELLOW" },
-    };
-    for (auto& t : tests) {
-        M5.Display.fillScreen(t.bg);
-        M5.Display.setTextColor(t.fg, t.bg);
-        M5.Display.setTextSize(2);
-        M5.Display.setCursor(4, 56);
-        M5.Display.print(t.name);
-        delay(800);
-    }
-    M5.Display.fillScreen(C_BLACK);
-}
 
 void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
 
     initColors();
-    colorTest();
     connectWifi();
     drawScan();
     fetchAndUpdate();
