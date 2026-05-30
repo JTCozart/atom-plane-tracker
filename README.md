@@ -21,7 +21,6 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 - ETA counts down in real time between API polls using the aircraft's last known position, speed, and track.
 - If multiple aircraft are overhead simultaneously the display cycles between them every 5 seconds.
 - When all aircraft leave the radius the screen returns to **SCANNING** with an animated radar sweep.
-- **Triple-click the button** to turn the display on/off (device continues running in the background).
 
 ---
 
@@ -31,7 +30,6 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 |---|---|
 | **Short press** | Cycle through screens: SCANNING → HISTORY → SUMMARY → SCANNING |
 | **Long press** (0.8 s) | Enter/exit DEBUG mode |
-| **Triple click** (within 600 ms) | Toggle display on/off |
 
 Screen details:
 

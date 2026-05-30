@@ -26,12 +26,9 @@ static uint32_t lastInteractionTime = 0;
 static uint32_t buttonPressTime     = 0;
 static bool     longPressHandled    = false;
 static uint32_t lastClickTime       = 0;
-static int      clickCount          = 0;
-static bool     displayOn           = true;
 static constexpr uint32_t kIdleTimeoutMs       = 30000;
 static constexpr uint32_t kLongPressDurationMs = 800;
 static constexpr uint32_t kDoubleClickWindowMs = 400;
-static constexpr uint32_t kTripleClickWindowMs = 600;
 
 // ── WiFi ──────────────────────────────────────────────────────────────────────
 
@@ -95,11 +92,6 @@ static void validatePollInterval() {
 // ── Render ────────────────────────────────────────────────────────────────────
 
 static void render() {
-    if (!displayOn) {
-        M5.Display.fillScreen(M5.Display.color565(0, 0, 0));
-        return;
-    }
-
     switch (mode) {
         case ScreenMode::Scanning:
             if (store.hasActiveAircraft()) {
@@ -194,39 +186,14 @@ void loop() {
     }
     if (M5.BtnA.wasReleased() && !longPressHandled) {
         lastInteractionTime = millis();
-        uint32_t now = millis();
-
-        // Triple-click detection: turn display on/off (works from any mode)
-        if (clickCount == 0) {
-            clickCount = 1;
-            lastClickTime = now;
-        } else if (now - lastClickTime <= kTripleClickWindowMs) {
-            clickCount++;
-            if (clickCount == 3) {
-                displayOn = !displayOn;
-                clickCount = 0;
-                render();
-                return;
-            }
-        } else {
-            // Time window expired, reset and start counting again
-            clickCount = 1;
-            lastClickTime = now;
-        }
-
         // Short press: scroll in debug, or cycle screens
-        // Allow double-click in debug mode to proceed; otherwise wait for triple-click window
-        if (clickCount > 1 && !(mode == ScreenMode::Debug && clickCount == 2 && now - lastClickTime <= kDoubleClickWindowMs)) {
-            return;  // Still within triple-click detection window
-        }
-
         if (mode == ScreenMode::Debug) {
-            if (clickCount == 2 && now - lastClickTime <= kDoubleClickWindowMs) {
-                clickCount = 0;  // reset for next sequence
-                lastClickTime = 0;
+            uint32_t now = millis();
+            if (now - lastClickTime <= kDoubleClickWindowMs) {
+                lastClickTime = 0;  // reset so triple-click doesn't re-trigger
                 notifier.sendTestNotification(config, display);
                 render();
-            } else if (clickCount == 1) {
+            } else {
                 lastClickTime = now;
                 int maxScroll = (int)store.apiResponseLines().size() - Display::kVisibleLineCount;
                 if (maxScroll < 0) maxScroll = 0;
