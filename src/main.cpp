@@ -37,11 +37,22 @@ struct Ac {
 // ── State ─────────────────────────────────────────────────────────────────────
 
 static ScreenMode           mode       = SCR_SCAN;
-static ScreenMode           preDebug   = SCR_SCAN;   // mode to restore on debug exit
+static ScreenMode           preDebug   = SCR_SCAN;
 static std::map<String, Ac> inRadius;
-static Ac                   lastAc;
-static bool                 hasHist    = false;
 static int                  cnt[4]     = {0, 0, 0, 0};
+
+// History log — newest at index 0, up to 5 entries
+static Ac  histLog[5];
+static int histCount = 0;  // entries stored (0-5)
+static int histIdx   = 0;  // which entry is on screen
+
+static void addToHistory(const Ac& ac) {
+    int slots = (histCount < 5) ? histCount : 4;
+    for (int i = slots; i > 0; i--) histLog[i] = histLog[i - 1];
+    histLog[0] = ac;
+    if (histCount < 5) histCount++;
+    histIdx = 0;  // always show newest on next HIST visit
+}
 
 // Multi-aircraft cycling
 static String               liveAcKey;
@@ -235,12 +246,15 @@ static void drawAcScreen(const Ac& ac, bool hist = false) {
         M5.Display.print(owner.substring(21, 42));
     }
 
-    // History bar — red strip across the bottom
+    // History bar — red strip across the bottom with entry counter
     if (hist) {
         M5.Display.fillRect(0, 116, 128, 12, C_RED);
         M5.Display.setTextColor(C_WHITE, C_RED);
-        M5.Display.setCursor(30, 118);
-        M5.Display.print("[ HISTORY ]");
+        char bar[24];
+        snprintf(bar, sizeof(bar), "[ HIST %d/%d ]", histIdx + 1, histCount);
+        int x = max(0, (128 - (int)strlen(bar) * 6) / 2);
+        M5.Display.setCursor(x, 118);
+        M5.Display.print(bar);
     }
 }
 
@@ -302,7 +316,10 @@ static void render() {
                 drawScan();
             }
             break;
-        case SCR_HIST:  drawAcScreen(lastAc, /*hist=*/true); break;
+        case SCR_HIST:
+            if (histCount > 0) drawAcScreen(histLog[histIdx], true);
+            else               drawScan();
+            break;
         case SCR_SUM:   drawSummary();                        break;
         case SCR_DEBUG: drawDebug();                          break;
     }
@@ -510,8 +527,7 @@ static void fetchAndUpdate() {
         Ac ac = { icao, callsign, type, owner, alt, lat, lon, gs, track, millis(), cls };
         inRadius[icao] = ac;
         cnt[cls]++;
-        lastAc   = ac;
-        hasHist  = true;
+        addToHistory(ac);
 
         // Interrupt to live view and pin to this new aircraft
         liveAcKey    = icao;
@@ -595,9 +611,18 @@ void loop() {
             }
         } else {
             switch (mode) {
-                case SCR_SCAN: mode = hasHist ? SCR_HIST : SCR_SUM; break;
-                case SCR_HIST: mode = SCR_SUM;                        break;
-                case SCR_SUM:  mode = SCR_SCAN;                       break;
+                case SCR_SCAN:
+                    mode = (histCount > 0) ? SCR_HIST : SCR_SUM;
+                    break;
+                case SCR_HIST:
+                    if (histIdx < histCount - 1) {
+                        histIdx++;   // show next older entry
+                    } else {
+                        histIdx = 0; // reset for next visit
+                        mode = SCR_SUM;
+                    }
+                    break;
+                case SCR_SUM:  mode = SCR_SCAN; break;
                 default: break;
             }
         }

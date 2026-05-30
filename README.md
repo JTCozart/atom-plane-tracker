@@ -35,7 +35,7 @@ SCANNING  →  HISTORY  →  SUMMARY  →  SCANNING  → ...
 | Screen | Description |
 |---|---|
 | **SCANNING** | Black screen with "SCANNING". When aircraft are overhead this shows the live detection screen instead. |
-| **HISTORY** | Last aircraft detected, displayed with a red `[ HISTORY ]` bar at the bottom. |
+| **HISTORY** | Last 5 detected aircraft. Each press advances to the next older entry (`[ HIST 1/3 ]` shown in the red bar). After the last entry one more press moves to SUMMARY. |
 | **SUMMARY** | Session totals by class (Military, Medevac, Commercial, Private). |
 
 - A new aircraft detected while on HISTORY or SUMMARY interrupts to the live view and returns to SCANNING when it leaves.
@@ -47,10 +47,25 @@ SCANNING  →  HISTORY  →  SUMMARY  →  SCANNING  → ...
 
 **Long press (0.8 s)** on the button from any screen enters debug mode. Long press again to exit and return to the previous screen.
 
-- Shows raw API fields for every aircraft in the last response: ICAO hex, callsign/registration, type code, ADS-B category, military flag, altitude, and owner/operator.
-- Header displays the last HTTP status code and total aircraft count returned.
-- **Short press** in debug scrolls through the data.
-- **Double short press** (two taps within 400 ms) sends a test ntfy notification and shows the HTTP response code on screen.
+The debug screen shows raw data from the last API response:
+
+```
+DBG HTTP:200 ac:7
+A1B2C3 UAL123 B738
+ cat:A3 mil:N 35000ft
+ United Airlines
+---
+D4E5F6 N12345 C172
+ cat:A1 mil:N  2500ft
+---
+                4/12
+```
+
+- **Header** — last HTTP status code and total aircraft count in the API response.
+- **Per aircraft** — ICAO hex, callsign or registration, ICAO type code, ADS-B category, military flag (`Y`/`N`), barometric altitude, and owner/operator.
+- **Short press** — scrolls down 15 lines at a time, wraps to top.
+- **Double short press** (two taps within 400 ms) — sends a test ntfy notification and displays the HTTP response code for 1.5 seconds. Shows `ntfy not configured` if `NTFY_TOPIC` is empty.
+- Scroll position is preserved while in debug. Aircraft arrivals and departures do not exit debug mode.
 
 ---
 
