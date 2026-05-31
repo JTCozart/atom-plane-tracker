@@ -259,6 +259,32 @@ GET https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{radius_nm}
 
 ---
 
+## Flashing the firmware
+
+Each [GitHub release](https://github.com/JTCozart/atom-plane-tracker/releases) includes two binaries:
+
+| File | Use |
+|---|---|
+| `atom-plane-tracker-vXXX.bin` | OTA updates - downloaded automatically by the device |
+| `atom-plane-tracker-vXXX-initial-flash.bin` | **First-time install** - single merged binary, flash at address `0x0` |
+
+### First-time install (no software required)
+
+1. Download `atom-plane-tracker-vXXX-initial-flash.bin` from the latest release
+2. Open **[Adafruit WebSerial ESPTool](https://adafruit.github.io/Adafruit_WebSerial_ESPTool/)** in Chrome (or any Chromium browser)
+3. Connect the M5Stack Atom S3 via USB
+4. Click **Connect**, select the serial port, then **Program**
+5. Set the address to `0x0` and select the `initial-flash.bin` file
+6. Click **Program** and wait for it to complete
+
+After the first flash, all future updates can be applied wirelessly from the **Update** tab in the web UI, or the device checks automatically every 24 hours and sends an ntfy notification when a new release is available.
+
+### Building from source
+
+See [QUICKSTART.md](QUICKSTART.md) and the [Development](#development) section below.
+
+---
+
 ## Getting started
 
 New to the project? Start with **[QUICKSTART.md](QUICKSTART.md)** - a step-by-step guide for first-time setup without needing to understand the code.
