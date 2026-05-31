@@ -102,7 +102,7 @@ Both modes serve the same form:
 | WiFi Password | Leave blank to keep the current password |
 | Latitude / Longitude | Center point for aircraft queries (decimal degrees) |
 | Search Radius (NM) | Query radius in nautical miles |
-| Poll Interval (ms) | How often to call the API. **Minimum: 10000 ms (10 seconds)** |
+| Scan Interval (s) | How often to scan for aircraft, in seconds. **Minimum: 10 seconds** |
 | ntfy Token | Leave blank to keep the current token |
 | ntfy Topic | Leave blank to disable notifications |
 | ntfy Classes | Comma-separated filter: `MIL`, `MEDVAC`, `COMM`, `PRIV` — empty = all |

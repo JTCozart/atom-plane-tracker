@@ -3,7 +3,8 @@
 
 enum class AircraftClass { Military = 0, Medevac, Commercial, Private };
 
-const char* aircraftClassName(AircraftClass cls);
+const char* aircraftClassName(AircraftClass cls);  // "MILITARY", "MEDEVAC", etc.
+const char* aircraftClassTag(AircraftClass cls);   // "MIL", "MEDVAC", "COMM", "PRIV"
 
 inline int toIndex(AircraftClass cls) { return static_cast<int>(cls); }
 
@@ -26,6 +27,9 @@ struct Aircraft {
                                   bool milFlag, const String& category);
 
     // Returns seconds until aircraft exits query circle, or -1 if unknown.
-    // Takes query params explicitly (no globals).
     int etaSeconds(double queryLatitude, double queryLongitude, float queryRadius) const;
+
+    // Adjusts a raw etaSeconds value for elapsed time since positionTimestamp.
+    // Returns clamped result (>= 0), or -1 if rawEta is -1.
+    int adjustedEta(int rawEta) const;
 };

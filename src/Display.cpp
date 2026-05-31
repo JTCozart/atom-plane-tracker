@@ -29,6 +29,53 @@ void Display::begin() {
     _scanCanvas->createSprite(128, 128);
 }
 
+// ── Splash screen ────────────────────────────────────────────────────────────
+
+void Display::showSplash(int frame) {
+    const int   cx = 64, cy = 38;
+    const int   outerR = 28, innerR = 13;
+    const float kRadPerFrame = 2.0f * (float)M_PI / 36;
+
+    uint16_t brightGreen = _scanCanvas->color565(0, 255,  0);
+    uint16_t midGreen    = _scanCanvas->color565(0, 130,  0);
+    uint16_t dimGreen    = _scanCanvas->color565(0,  50,  0);
+
+    _scanCanvas->fillScreen(_colorBlack);
+
+    // Radar rings
+    _scanCanvas->drawCircle(cx, cy, outerR, brightGreen);
+    _scanCanvas->drawCircle(cx, cy, innerR, dimGreen);
+    _scanCanvas->drawPixel(cx, cy, brightGreen);
+
+    // Animated sweep with 3-step trailing glow
+    uint16_t trailColors[4] = { dimGreen, midGreen, midGreen, brightGreen };
+    for (int t = 0; t < 4; t++) {
+        float angle = (frame - (3 - t)) * kRadPerFrame;
+        int   x2    = cx + (int)(outerR * sinf(angle));
+        int   y2    = cy - (int)(outerR * cosf(angle));
+        _scanCanvas->drawLine(cx, cy, x2, y2, trailColors[t]);
+    }
+
+    // "PLANE" and "TRACKER" centered, large
+    _scanCanvas->setTextColor(brightGreen, _colorBlack);
+    _scanCanvas->setTextSize(2);
+    _scanCanvas->setCursor(34, 74);
+    _scanCanvas->print("PLANE");
+    _scanCanvas->setCursor(22, 92);
+    _scanCanvas->print("TRACKER");
+
+    // Animated "Connecting..." dots
+    _scanCanvas->setTextSize(1);
+    int    dots  = (frame / 5) % 4;
+    String label = "Connecting";
+    for (int i = 0; i < dots; i++) label += '.';
+    int labelX = (128 - (int)label.length() * 6) / 2;
+    _scanCanvas->setCursor(max(0, labelX), 114);
+    _scanCanvas->print(label);
+
+    _scanCanvas->pushSprite(0, 0);
+}
+
 // ── Scan / AP screens ─────────────────────────────────────────────────────────
 
 void Display::showScanning() {
@@ -38,19 +85,20 @@ void Display::showScanning() {
     const int   kFramesPerRev = 36;
     const float kRadPerFrame  = 2.0f * (float)M_PI / kFramesPerRev;
 
-    uint16_t dimGray   = _scanCanvas->color565(50,  50,  50);
-    uint16_t midGray   = _scanCanvas->color565(110, 110, 110);
-    uint16_t nearWhite = _scanCanvas->color565(190, 190, 190);
+    uint16_t dimGreen  = _scanCanvas->color565(0,  50,  0);
+    uint16_t midGreen  = _scanCanvas->color565(0, 130,  0);
+    uint16_t nearGreen = _scanCanvas->color565(0, 210,  0);
+    uint16_t brightGreen = _scanCanvas->color565(0, 255, 0);
 
     _scanCanvas->fillScreen(_colorBlack);
 
     // Range rings
-    _scanCanvas->drawCircle(cx, cy, outerR, _colorWhite);
-    _scanCanvas->drawCircle(cx, cy, innerR, dimGray);
-    _scanCanvas->drawPixel(cx, cy, _colorWhite);
+    _scanCanvas->drawCircle(cx, cy, outerR, brightGreen);
+    _scanCanvas->drawCircle(cx, cy, innerR, dimGreen);
+    _scanCanvas->drawPixel(cx, cy, brightGreen);
 
-    // Sweep line + 3-step trailing glow (dim → mid → near-white → white)
-    uint16_t trailColors[4] = { dimGray, midGray, nearWhite, _colorWhite };
+    // Sweep line + 3-step trailing glow (dim → mid → near → bright green)
+    uint16_t trailColors[4] = { dimGreen, midGreen, nearGreen, brightGreen };
     for (int t = 0; t < 4; t++) {
         float angle = (_scanAnimFrame - (3 - t)) * kRadPerFrame;
         int   x2    = cx + (int)(outerR * sinf(angle));
@@ -59,7 +107,7 @@ void Display::showScanning() {
     }
 
     // "SCANNING..." label with animated dot count
-    _scanCanvas->setTextColor(_colorWhite, _colorBlack);
+    _scanCanvas->setTextColor(brightGreen, _colorBlack);
     _scanCanvas->setTextSize(1);
     int    dotCount = (_scanAnimFrame / (kFramesPerRev / 4)) % 4;
     String label    = "SCANNING";
@@ -122,11 +170,10 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
     if (!isHistorical) {
         M5.Display.setTextSize(1.5);
         M5.Display.setCursor(2, 60);
-        if (etaSeconds < 0) {
+        int eta = aircraft.adjustedEta(etaSeconds);
+        if (eta < 0) {
             M5.Display.print("ETA: --:--");
         } else {
-            int elapsed = (int)((millis() - aircraft.positionTimestamp) / 1000);
-            int eta = max(0, etaSeconds - elapsed);
             M5.Display.printf("ETA: %d:%02d", eta / 60, eta % 60);
         }
     }

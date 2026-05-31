@@ -22,11 +22,15 @@ public:
     const String& ipAddress() const      { return _ipAddress; }
     void setIPAddress(const String& ip)  { _ipAddress = ip; }
 
+    // Returns true (and clears the flag) if a /control request changed the screen mode.
+    bool consumeControlChange() { bool v = _controlChanged; _controlChanged = false; return v; }
+
 private:
     WebServer    _server{80};
     bool         _inSetupMode = false;
     String       _ipAddress   = "0.0.0.0";
-    ScreenMode*  _screenMode  = nullptr;
+    ScreenMode*  _screenMode    = nullptr;
+    bool         _controlChanged = false;
 
     Config&        _cfg;
     AircraftStore& _store;
@@ -37,7 +41,9 @@ private:
     void handleClear();
     void handleControl();
     void handleScreen();
+    void handleNotifyTest();
 
-    String buildScreenDiv();   // shared by handleScreen() and handleRoot() fragment
+    String buildScreenDiv();        // shared by handleScreen() and handleRoot() fragment
+    static String buildRebootPage(const String& heading, const String& subtext);
     static String rgb565ToCss(uint16_t c);
 };

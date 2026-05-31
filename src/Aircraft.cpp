@@ -10,6 +10,15 @@ const char* aircraftClassName(AircraftClass cls) {
     }
 }
 
+const char* aircraftClassTag(AircraftClass cls) {
+    switch (cls) {
+        case AircraftClass::Military:   return "MIL";
+        case AircraftClass::Medevac:    return "MEDVAC";
+        case AircraftClass::Commercial: return "COMM";
+        default:                        return "PRIV";
+    }
+}
+
 // ── Classification helpers ────────────────────────────────────────────────────
 
 // FAA LIFEGUARD prefix is a regulated designation — safe to match on callsign.
@@ -88,4 +97,10 @@ int Aircraft::etaSeconds(double queryLatitude, double queryLongitude, float quer
         if (dist > R_NM) return sec;
     }
     return -1;  // still inside after 60 min
+}
+
+int Aircraft::adjustedEta(int rawEta) const {
+    if (rawEta < 0) return -1;
+    int elapsed = (int)((millis() - positionTimestamp) / 1000);
+    return max(0, rawEta - elapsed);
 }

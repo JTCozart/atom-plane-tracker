@@ -33,28 +33,19 @@ static constexpr uint32_t kDoubleClickWindowMs = 400;
 // ── WiFi ──────────────────────────────────────────────────────────────────────
 
 static bool connectToWifi() {
-    M5.Display.fillScreen(M5.Display.color565(0, 0, 0));
-    M5.Display.setTextColor(M5.Display.color565(255, 255, 255),
-                            M5.Display.color565(0, 0, 0));
-    M5.Display.setTextSize(1);
-    M5.Display.setCursor(0, 0);
-    M5.Display.println("Connecting WiFi...");
-    M5.Display.println(config.ssid);
-
     WiFi.mode(WIFI_STA);
     WiFi.begin(config.ssid, config.password);
-    for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) delay(500);
+
+    for (int frame = 0; frame < 80 && WiFi.status() != WL_CONNECTED; frame++)  {
+        display.showSplash(frame);
+        delay(250);
+    }
 
     if (WiFi.status() == WL_CONNECTED) {
         webUI.setIPAddress(WiFi.localIP().toString());
         webUI.begin(mode, false);
-        M5.Display.println("Connected!");
-        M5.Display.println(webUI.ipAddress().c_str());
-        delay(800);
         return true;
     }
-    M5.Display.println("Failed. Starting setup AP.");
-    delay(1200);
     return false;
 }
 
@@ -158,6 +149,13 @@ void loop() {
 
     M5.update();
     webUI.processRequests();
+
+    // Web UI control button changed the screen mode — update the physical display immediately
+    if (webUI.consumeControlChange()) {
+        debugScrollOffset = 0;
+        lastInteractionTime = millis();
+        render();
+    }
 
     // Idle timeout — return to Scanning after 30s of no interaction on History/Summary
     if ((mode == ScreenMode::History || mode == ScreenMode::Summary) &&

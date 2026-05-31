@@ -1,4 +1,5 @@
 #include "WebUI.h"
+#include "Notifier.h"
 #include <WiFi.h>
 #include <Preferences.h>
 
@@ -14,11 +15,12 @@ void WebUI::begin(ScreenMode& mode, bool isSetupMode) {
         WiFi.softAP("PlaneTracker", "PlaneTracker");
     }
 
-    _server.on("/",        HTTP_GET,  [this]() { handleRoot();    });
-    _server.on("/save",    HTTP_POST, [this]() { handleSave();    });
-    _server.on("/clear",   HTTP_POST, [this]() { handleClear();   });
-    _server.on("/control", HTTP_GET,  [this]() { handleControl(); });
-    _server.on("/screen",  HTTP_GET,  [this]() { handleScreen();  });
+    _server.on("/",            HTTP_GET,  [this]() { handleRoot();       });
+    _server.on("/save",        HTTP_POST, [this]() { handleSave();       });
+    _server.on("/clear",       HTTP_POST, [this]() { handleClear();      });
+    _server.on("/control",     HTTP_GET,  [this]() { handleControl();    });
+    _server.on("/screen",      HTTP_GET,  [this]() { handleScreen();     });
+    _server.on("/notify-test", HTTP_POST, [this]() { handleNotifyTest(); });
     _server.begin();
 }
 
@@ -33,10 +35,12 @@ void WebUI::handleRoot() {
         F("<!DOCTYPE html><html><head><title>PlaneTracker Setup</title>"
           "<meta name='viewport' content='width=device-width,initial-scale=1'>"
           "<style>"
-          "body{font-family:sans-serif;max-width:820px;margin:24px auto;padding:0 12px}"
+          "body{font-family:sans-serif;max-width:820px;margin:24px auto;padding:0 12px;"
+          "background:#fff;color:#222;transition:background .2s,color .2s}"
           "h2{margin-bottom:16px}h3{margin:0 0 10px}"
           "label{display:block;margin-top:10px;font-size:.9em}"
-          "input{width:100%;padding:7px;box-sizing:border-box;margin-top:3px;font-size:1em}"
+          "input{width:100%;padding:7px;box-sizing:border-box;margin-top:3px;font-size:1em;"
+          "background:#fff;color:#222;border:1px solid #ccc;border-radius:3px}"
           ".btn{display:block;margin-top:18px;width:100%;padding:10px;background:#1976D2;"
           "color:#fff;border:none;font-size:1em;cursor:pointer;border-radius:4px}"
           ".layout{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}"
@@ -47,9 +51,42 @@ void WebUI::handleRoot() {
           "border:4px solid #222;border-radius:6px;overflow:hidden;text-align:left}"
           ".ctrl{display:flex;gap:6px;margin-top:8px}"
           ".cb{flex:1;padding:8px 0;background:#37474F;color:#fff;border:none;"
-          "cursor:pointer;border-radius:4px;font-size:.82em}"
+          "cursor:pointer;border-radius:4px;font-size:.78em;line-height:1.6}"
           ".cb:hover{background:#546E7A}.cb.on{background:#1976D2}"
+          ".tabs{border:1px solid #ddd;border-radius:6px;overflow:hidden;margin-bottom:4px}"
+          ".tab-hdr{display:flex;background:#f5f5f5;border-bottom:1px solid #ddd}"
+          ".tab-btn{flex:1;padding:10px 4px;border:none;background:none;cursor:pointer;"
+          "font-size:.85em;border-bottom:3px solid transparent;color:#555}"
+          ".tab-btn.on{background:#fff;border-bottom-color:#1976D2;color:#1976D2;font-weight:600}"
+          ".tab-panel{padding:14px;display:none}"
+          ".tab-panel.on{display:block}"
+          "body.dark .tabs{border-color:#444}"
+          "body.dark .tab-hdr{background:#252525;border-color:#444}"
+          "body.dark .tab-btn{color:#aaa}"
+          "body.dark .tab-btn.on{background:#1a1a1a;border-bottom-color:#64b5f6;color:#64b5f6}"
+          ".modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);"
+          "z-index:1000;align-items:center;justify-content:center}"
+          ".modal.open{display:flex}"
+          "#mapWrap{background:#fff;padding:12px;border-radius:8px;width:min(92vw,520px)}"
+          "#map{height:340px;width:100%;margin-top:8px}"
+          ".map-hdr{display:flex;justify-content:space-between;align-items:center}"
+          ".map-hint{font-size:.82em;color:#555;margin-top:4px}"
+          "#dmBtn{position:fixed;top:10px;right:14px;background:none;border:1px solid #aaa;"
+          "border-radius:20px;padding:4px 10px;cursor:pointer;font-size:1em;z-index:999}"
+          "body.dark{background:#1a1a1a;color:#e0e0e0}"
+          "body.dark input{background:#2a2a2a;color:#e0e0e0;border-color:#555}"
+          "body.dark label{color:#bbb}"
+          "body.dark small{color:#999}"
+          "body.dark h2,body.dark h3{color:#e0e0e0}"
+          "body.dark .sec{color:#aaa;border-bottom-color:#444}"
+          "body.dark #mapWrap{background:#2a2a2a;color:#e0e0e0}"
+          "body.dark .map-hint{color:#aaa}"
+          "body.dark #dmBtn{border-color:#666;color:#e0e0e0}"
+          "body.dark a{color:#64b5f6}"
           "</style>"
+          "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
+          "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css'>"
+          "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>"
           "<script>"
           "function refresh(){"
             "fetch('/screen?fragment=1')"
@@ -62,40 +99,143 @@ void WebUI::handleRoot() {
             "document.querySelectorAll('.cb').forEach(function(b){"
               "b.classList.toggle('on',b.dataset.s===s);});"
           "}"
+          "var _map=null,_marker=null;"
+          "function openMap(){"
+            "var lat=parseFloat(document.querySelector('[name=lat]').value)||0;"
+            "var lon=parseFloat(document.querySelector('[name=lon]').value)||0;"
+            "document.getElementById('mapModal').classList.add('open');"
+            "if(!_map){"
+              "_map=L.map('map').setView([lat||40,lon||-95],lat?12:4);"
+              "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',"
+                "{attribution:'&copy; OpenStreetMap contributors',maxZoom:19}"
+              ").addTo(_map);"
+              "_map.on('click',function(e){"
+                "document.querySelector('[name=lat]').value=e.latlng.lat.toFixed(6);"
+                "document.querySelector('[name=lon]').value=e.latlng.lng.toFixed(6);"
+                "if(_marker)_marker.setLatLng(e.latlng);"
+                "else _marker=L.marker(e.latlng).addTo(_map);"
+              "});"
+              "if(lat&&lon)_marker=L.marker([lat,lon]).addTo(_map);"
+            "}else{"
+              "if(lat&&lon){_map.setView([lat,lon],12);"
+              "if(_marker)_marker.setLatLng([lat,lon]);"
+              "else _marker=L.marker([lat,lon]).addTo(_map);}"
+            "}"
+            "setTimeout(function(){_map.invalidateSize();},60);"
+          "}"
+          "function closeMap(){"
+            "document.getElementById('mapModal').classList.remove('open');"
+          "}"
+          "function testNotify(btn){"
+            "btn.disabled=true;btn.textContent='Sending...';"
+            "fetch('/notify-test',{method:'POST'})"
+            ".then(function(r){return r.text();})"
+            ".then(function(t){"
+              "if(t==='NOT_CONFIGURED')btn.textContent='Not configured';"
+              "else if(parseInt(t)>=200&&parseInt(t)<300)btn.textContent='Sent! (HTTP '+t+')';"
+              "else btn.textContent='Failed (HTTP '+t+')';"
+              "setTimeout(function(){btn.disabled=false;btn.textContent='Send Test Notification';},3000);"
+            "}).catch(function(){"
+              "btn.textContent='Error';"
+              "setTimeout(function(){btn.disabled=false;btn.textContent='Send Test Notification';},3000);"
+            "});"
+          "}"
+          "function showTab(id){"
+            "document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('on');});"
+            "document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('on');});"
+            "document.getElementById('tab-'+id).classList.add('on');"
+            "document.querySelector('[data-tab='+id+']').classList.add('on');"
+            "localStorage.setItem('pt-tab',id);"
+          "}"
+          "document.addEventListener('DOMContentLoaded',function(){"
+            "showTab(localStorage.getItem('pt-tab')||'wifi');"
+          "});"
           "refresh();setInterval(refresh,5000);"
+          "function toggleDark(){"
+            "var d=document.body.classList.toggle('dark');"
+            "localStorage.setItem('pt-dark',d?'1':'0');"
+            "document.getElementById('dmBtn').innerHTML=d?'<i class=\"fa-solid fa-sun\"></i>':'<i class=\"fa-solid fa-moon\"></i>';"
+          "}"
+          "document.addEventListener('DOMContentLoaded',function(){"
+            "if(localStorage.getItem('pt-dark')==='1'){"
+              "document.body.classList.add('dark');"
+              "document.getElementById('dmBtn').innerHTML='<i class=\"fa-solid fa-sun\"></i>';"
+            "}"
+          "});"
           "</script>"
-          "</head><body><h2>&#9992; PlaneTracker Setup</h2>"
+          "</head><body>"
+          "<button id='dmBtn' onclick='toggleDark()' title='Toggle dark mode'><i class='fa-solid fa-moon'></i></button>"
+          "<h2><i class='fa-solid fa-plane' style='margin-right:8px'></i>PlaneTracker Setup</h2>"
           "<div class='layout'>"
           "<div class='form-col'>"
           "<form method='POST' action='/save'>");
 
-    html += "<label>WiFi SSID</label>"
+    // ── Tab header ────────────────────────────────────────────────────────────
+    html += "<div class='tabs'>"
+            "<div class='tab-hdr'>"
+            "<button type='button' class='tab-btn' data-tab='wifi'    onclick='showTab(\"wifi\")'>"
+            "<i class='fa-solid fa-wifi'></i><br>WiFi</button>"
+            "<button type='button' class='tab-btn' data-tab='detect'  onclick='showTab(\"detect\")'>"
+            "<i class='fa-solid fa-satellite-dish'></i><br>Detection</button>"
+            "<button type='button' class='tab-btn' data-tab='notify'  onclick='showTab(\"notify\")'>"
+            "<i class='fa-solid fa-bell'></i><br>Notifications</button>"
+            "</div>";
+
+    // ── WiFi tab ──────────────────────────────────────────────────────────────
+    html += "<div class='tab-panel' id='tab-wifi'>";
+    html += "<label>SSID</label>"
             "<input name='ssid' value='" + String(_cfg.ssid) + "'>";
-    html += "<label>WiFi Password</label>"
+    html += "<label>Password</label>"
             "<input name='pass' type='password' placeholder='leave blank to keep current'>";
+    html += "</div>";
+
+    // ── Detection tab ─────────────────────────────────────────────────────────
+    html += "<div class='tab-panel' id='tab-detect'>";
     html += "<label>Latitude</label>"
             "<input name='lat' value='" + String(_cfg.latitude, 6) + "'>";
     html += "<label>Longitude</label>"
             "<input name='lon' value='" + String(_cfg.longitude, 6) + "'>";
+    html += "<button type='button' onclick='openMap()' "
+            "style='margin-top:8px;padding:6px 14px;background:#37474F;color:#fff;"
+            "border:none;border-radius:4px;cursor:pointer;font-size:.9em'>"
+            "<i class='fa-solid fa-location-dot' style='margin-right:5px'></i>Pick on map</button>";
     html += "<label>Search Radius (nautical miles)</label>"
             "<input name='radius' value='" + String(_cfg.radius) + "'>";
-    html += "<label>Poll Interval (ms) <small style='font-weight:normal'> - minimum " +
-            String(Config::kMinPollIntervalMs) + "ms</small></label>"
-            "<input name='poll' type='number' min='" + String(Config::kMinPollIntervalMs) +
-            "' value='" + String(_cfg.pollIntervalMs) + "'>";
-    html += "<hr style='margin:18px 0'>";
+    html += "<label>Scan Interval <small style='font-weight:normal'>(seconds &mdash; minimum " +
+            String(Config::kMinPollIntervalMs / 1000) + "s)</small></label>"
+            "<input name='poll' type='number' min='" + String(Config::kMinPollIntervalMs / 1000) +
+            "' value='" + String(_cfg.pollIntervalMs / 1000) + "'>";
+    html += "</div>";
+
+    // ── Notifications tab ─────────────────────────────────────────────────────
+    html += "<div class='tab-panel' id='tab-notify'>";
+    html += "<p style='margin:0 0 10px;font-size:.85em;color:#666'>"
+            "<i class='fa-solid fa-circle-info' style='margin-right:4px'></i>"
+            "Need an account? <a href='https://ntfy.sh' target='_blank'>"
+            "<i class='fa-solid fa-arrow-up-right-from-square' style='margin-right:3px'></i>"
+            "Create a free ntfy account</a></p>";
     html += "<label>ntfy Token</label>"
             "<input name='ntfyToken' type='password' placeholder='leave blank to keep current'>";
     html += "<label>ntfy Topic</label>"
             "<input name='ntfyTopic' value='" + String(_cfg.notifyTopic) + "'>";
-    html += "<label>ntfy Classes <small style='font-weight:normal'>(comma-separated: MIL, MEDVAC, COMM, PRIV - empty&nbsp;=&nbsp;all)</small></label>"
+    html += "<label>Classes <small style='font-weight:normal'>(comma-separated: MIL, MEDVAC, COMM, PRIV &mdash; empty&nbsp;=&nbsp;all)</small></label>"
             "<input name='ntfyClasses' value='" + String(_cfg.notifyClassFilter) + "' placeholder='empty = all classes'>";
-    html += "<button class='btn' type='submit'>Save &amp; Reboot</button>"
+    html += "<button type='button' onclick='testNotify(this)' "
+            "style='margin-top:10px;padding:8px 14px;background:#37474F;color:#fff;"
+            "border:none;border-radius:4px;cursor:pointer;font-size:.9em;width:100%'>"
+            "<i class='fa-solid fa-paper-plane' style='margin-right:6px'></i>Send Test Notification</button>";
+    html += "</div>";
+
+    html += "</div>"; // end tabs
+
+    // ── Save / Clear ──────────────────────────────────────────────────────────
+    html += "<button class='btn' type='submit'>"
+            "<i class='fa-solid fa-floppy-disk' style='margin-right:6px'></i>Save &amp; Reboot</button>"
             "</form>"
-            "<form method='POST' action='/clear' style='margin-top:12px'>"
+            "<form method='POST' action='/clear' style='margin-top:10px'>"
             "<button class='btn' type='submit' style='background:#D32F2F' "
             "onclick='return confirm(\"Reset all settings to factory defaults? This cannot be undone.\")'>"
-            "Clear All Settings</button>"
+            "<i class='fa-solid fa-trash' style='margin-right:6px'></i>Clear All Settings</button>"
             "</form>"
             "</div>"; // end form-col
 
@@ -104,13 +244,27 @@ void WebUI::handleRoot() {
             "<h3>Live Screen</h3>"
             "<div id='scrWrap'></div>"
             "<div class='ctrl'>"
-            "<button class='cb' data-s='scan'    onclick='ctrl(\"scan\")'>Scan</button>"
-            "<button class='cb' data-s='history' onclick='ctrl(\"history\")'>History</button>"
-            "<button class='cb' data-s='summary' onclick='ctrl(\"summary\")'>Summary</button>"
-            "<button class='cb' data-s='debug'   onclick='ctrl(\"debug\")'>Debug</button>"
+            "<button class='cb' data-s='scan'    onclick='ctrl(\"scan\")'><i class='fa-solid fa-satellite-dish'></i><br>Scan</button>"
+            "<button class='cb' data-s='history' onclick='ctrl(\"history\")'><i class='fa-solid fa-clock-rotate-left'></i><br>History</button>"
+            "<button class='cb' data-s='summary' onclick='ctrl(\"summary\")'><i class='fa-solid fa-chart-bar'></i><br>Summary</button>"
+            "<button class='cb' data-s='debug'   onclick='ctrl(\"debug\")'><i class='fa-solid fa-bug'></i><br>Debug</button>"
             "</div>"
             "<p style='color:#666;font-size:.8em;margin-top:6px'>Refreshes every 5s</p>"
             "</div>"; // end preview-col
+
+    // Map picker modal
+    html += "<div class='modal' id='mapModal'>"
+            "<div id='mapWrap'>"
+            "<div class='map-hdr'>"
+            "<strong>Pick your location</strong>"
+            "<button type='button' onclick='closeMap()' "
+            "style='background:#555;color:#fff;border:none;padding:4px 10px;"
+            "border-radius:4px;cursor:pointer'><i class='fa-solid fa-xmark' style='margin-right:4px'></i>Close</button>"
+            "</div>"
+            "<p class='map-hint'>Click anywhere on the map to set your latitude &amp; longitude.</p>"
+            "<div id='map'></div>"
+            "</div>"
+            "</div>";
 
     html += "</div></body></html>"; // end layout + body
 
@@ -132,7 +286,7 @@ void WebUI::handleSave() {
     if (_server.hasArg("radius"))
         prefs.putFloat ("radius", _server.arg("radius").toFloat());
     if (_server.hasArg("poll")) {
-        uint32_t pollValue = (uint32_t)_server.arg("poll").toInt();
+        uint32_t pollValue = (uint32_t)_server.arg("poll").toInt() * 1000;  // form sends seconds
         if (pollValue < Config::kMinPollIntervalMs) pollValue = Config::kMinPollIntervalMs;
         prefs.putUInt("pollMs", pollValue);
     }
@@ -145,24 +299,7 @@ void WebUI::handleSave() {
 
     prefs.end();
 
-    _server.send(200, "text/html",
-        F("<!DOCTYPE html><html><head><title>PlaneTracker - Saved</title>"
-          "<style>body{font-family:sans-serif;text-align:center;margin-top:60px}"
-          "p{color:#666}</style>"
-          "<script>"
-          "function poll(){"
-            "fetch('/').then(function(r){"
-              "if(r.ok)window.location.href='/';"
-              "else setTimeout(poll,1000);"
-            "}).catch(function(){setTimeout(poll,1000);});"
-          "}"
-          "setTimeout(poll,4000);"
-          "</script>"
-          "</head><body>"
-          "<h2>Saved!</h2>"
-          "<p>Rebooting&hellip;</p>"
-          "<p>Returning to settings when back online.</p>"
-          "</body></html>"));
+    _server.send(200, "text/html", buildRebootPage("Saved!", "Rebooting&hellip;"));
     delay(1500);
     ESP.restart();
 }
@@ -170,10 +307,19 @@ void WebUI::handleSave() {
 void WebUI::handleControl() {
     if (_server.hasArg("screen") && _screenMode) {
         String s = _server.arg("screen");
-        if      (s == "scan")    *_screenMode = ScreenMode::Scanning;
-        else if (s == "history") *_screenMode = ScreenMode::History;
+        if (s == "history") {
+            if (*_screenMode == ScreenMode::History && _store.historyCount() > 0) {
+                // Already on history — page to the next entry, wrapping at the end
+                int next = _store.historyIndex() + 1;
+                _store.setHistoryIndex(next < _store.historyCount() ? next : 0);
+            } else {
+                *_screenMode = ScreenMode::History;
+                _store.setHistoryIndex(0);
+            }
+        } else if (s == "scan")    *_screenMode = ScreenMode::Scanning;
         else if (s == "summary") *_screenMode = ScreenMode::Summary;
         else if (s == "debug")   *_screenMode = ScreenMode::Debug;
+        _controlChanged = true;
     }
     _server.send(200, "text/plain", "OK");
 }
@@ -184,13 +330,51 @@ void WebUI::handleClear() {
     prefs.clear();  // Erase all keys in this namespace
     prefs.end();
 
-    _server.send(200, "text/html",
-        F("<!DOCTYPE html><html><body style='font-family:sans-serif;text-align:center;margin-top:60px'>"
-          "<h2>Settings cleared!</h2>"
-          "<p>Rebooting with factory defaults...</p>"
-          "</body></html>"));
+    _server.send(200, "text/html", buildRebootPage("Settings Cleared!", "Rebooting with factory defaults&hellip;"));
     delay(1500);
     ESP.restart();
+}
+
+void WebUI::handleNotifyTest() {
+    if (strlen(_cfg.notifyToken) == 0 || strlen(_cfg.notifyTopic) == 0) {
+        _server.send(200, "text/plain", "NOT_CONFIGURED");
+        return;
+    }
+    int code = Notifier::sendTestHttp(_cfg);
+    _server.send(200, "text/plain", String(code));
+}
+
+String WebUI::buildRebootPage(const String& heading, const String& subtext) {
+    return String(
+        "<!DOCTYPE html><html><head><title>PlaneTracker</title>"
+        "<style>"
+        "body{font-family:sans-serif;text-align:center;margin-top:60px}"
+        "p{color:#666}"
+        "#wifi-warn{display:none;margin:24px auto;max-width:380px;padding:14px 18px;"
+        "background:#FFF8E1;border:1px solid #FFB300;border-radius:6px;"
+        "color:#5D4037;font-size:.9em;text-align:left;line-height:1.5}"
+        "</style>"
+        "<script>"
+        "function poll(){"
+          "fetch('/').then(function(r){"
+            "if(r.ok)window.location.href='/';"
+            "else setTimeout(poll,1000);"
+          "}).catch(function(){setTimeout(poll,1000);});"
+        "}"
+        "setTimeout(poll,4000);"
+        "setTimeout(function(){document.getElementById('wifi-warn').style.display='block';},30000);"
+        "</script>"
+        "</head><body>"
+        "<h2>") + heading + String("</h2>"
+        "<p>") + subtext + String("</p>"
+        "<p>Returning to settings when back online.</p>"
+        "<div id='wifi-warn'>"
+        "<strong>Taking too long?</strong><br>"
+        "If you changed the WiFi network or password, the device may have started "
+        "its own setup hotspot instead. Connect to the <strong>PlaneTracker</strong> "
+        "WiFi network and open <strong>192.168.4.1</strong> to reconfigure."
+        "</div>"
+        "</body></html>");
 }
 
 // Converts a uint16_t RGB565 color to a CSS hex string
@@ -214,7 +398,11 @@ String WebUI::buildScreenDiv() {
         String cs = ac.callsign.length() ? ac.callsign : "N/A";
         if (cs.length() > 10) cs = cs.substring(0, 10);
 
-        inner += "<div style='font-size:26px;line-height:1.2;margin:4px 0'>" + cs + "</div>";
+        String trackUrl = "https://globe.adsbexchange.com/?icao=" + ac.icao;
+        inner += "<div style='font-size:26px;line-height:1.2;margin:4px 0'>"
+                 "<a href='" + trackUrl + "' target='_blank' "
+                 "style='color:inherit;text-decoration:none;border-bottom:1px dotted'>"
+                 + cs + "</a></div>";
         inner += "<div>Type: " + String(ac.type.length() ? ac.type.c_str() : "???") + "</div>";
 
         char buf[40];
@@ -223,12 +411,10 @@ String WebUI::buildScreenDiv() {
         inner += "<div>" + String(buf) + "</div>";
 
         if (!hist) {
-            int rawEta = ac.etaSeconds(_cfg.latitude, _cfg.longitude, _cfg.radius);
-            if (rawEta < 0) {
+            int eta = ac.adjustedEta(ac.etaSeconds(_cfg.latitude, _cfg.longitude, _cfg.radius));
+            if (eta < 0) {
                 inner += "<div>ETA:  --:--</div>";
             } else {
-                int elapsed = (int)((millis() - ac.positionTimestamp) / 1000);
-                int eta = max(0, rawEta - elapsed);
                 snprintf(buf, sizeof(buf), "ETA:  %d:%02d", eta / 60, eta % 60);
                 inner += "<div>" + String(buf) + "</div>";
             }

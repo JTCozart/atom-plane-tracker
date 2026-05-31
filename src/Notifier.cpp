@@ -3,21 +3,14 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
-static const char* classFilterTag(AircraftClass cls) {
-    switch (cls) {
-        case AircraftClass::Military:   return "MIL";
-        case AircraftClass::Medevac:    return "MEDVAC";
-        case AircraftClass::Commercial: return "COMM";
-        default:                        return "PRIV";
-    }
-}
-
 void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     if (strlen(config.notifyToken) == 0 || strlen(config.notifyTopic) == 0) return;
 
     // If notifyClassFilter is set, only notify for listed classes
     if (strlen(config.notifyClassFilter) > 0 &&
-        strstr(config.notifyClassFilter, classFilterTag(aircraft.classification)) == nullptr) return;
+        strstr(config.notifyClassFilter, aircraftClassTag(aircraft.classification)) == nullptr) return;
+
+    static const char* kRadarIcon = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4e1.png";
 
     const char* priority;
     const char* tags;
@@ -47,9 +40,28 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     http.addHeader("Title",    String(aircraftClassName(aircraft.classification)) + " Aircraft Detected");
     http.addHeader("Priority", priority);
     http.addHeader("Tags",     tags);
+    http.addHeader("Icon",     kRadarIcon);
     http.addHeader("Action",   "view, Track Flight, " + trackUrl + ", clear=true");
     http.POST(body);
     http.end();
+}
+
+int Notifier::sendTestHttp(const Config& config) {
+    if (strlen(config.notifyToken) == 0 || strlen(config.notifyTopic) == 0) return 0;
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, String("https://ntfy.sh/") + config.notifyTopic);
+    http.addHeader("Authorization", String("Bearer ") + config.notifyToken);
+    http.addHeader("Content-Type",  "text/plain");
+    http.addHeader("Title",    "PlaneTracker Online");
+    http.addHeader("Priority", "default");
+    http.addHeader("Tags",     "white_check_mark");
+    http.addHeader("Icon",     "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4e1.png");
+    int code = http.POST("Notifications are active. You will be alerted when aircraft enter your scan radius.");
+    http.end();
+    return code;
 }
 
 int Notifier::sendTestNotification(const Config& config, Display& display) {
@@ -58,21 +70,8 @@ int Notifier::sendTestNotification(const Config& config, Display& display) {
         delay(1500);
         return 0;
     }
-
     display.showMessage("Sending test...");
-
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-    http.begin(client, String("https://ntfy.sh/") + config.notifyTopic);
-    http.addHeader("Authorization", String("Bearer ") + config.notifyToken);
-    http.addHeader("Content-Type",  "text/plain");
-    http.addHeader("Title",    "atom-plane-tracker test");
-    http.addHeader("Priority", "default");
-    http.addHeader("Tags",     "white_check_mark");
-    int code = http.POST("Test notification from atom-plane-tracker");
-    http.end();
-
+    int code = sendTestHttp(config);
     char buf[16];
     snprintf(buf, sizeof(buf), "HTTP %d", code);
     display.showMessage("Sending test...", String(buf));

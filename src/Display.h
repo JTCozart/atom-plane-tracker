@@ -12,6 +12,7 @@ public:
     // Initialise color tables — must be called after M5.begin()
     void begin();
 
+    void showSplash(int frame);
     void showScanning();
     void showSetupMode();
 
