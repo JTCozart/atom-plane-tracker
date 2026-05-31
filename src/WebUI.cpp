@@ -634,7 +634,14 @@ String WebUI::buildScreenDiv() {
         inner += "<div>DBG HTTP:" + String(_store.lastResponseCode()) +
                  " ac:" + String(_store.lastAircraftCount()) + "</div>";
         inner += "<div>IP: " + _ipAddress + "</div>";
-        int shown = min((int)lines.size(), 13);
+        {
+            uint32_t up = millis() / 1000;
+            char upBuf[16];
+            snprintf(upBuf, sizeof(upBuf), "UP: %02u:%02u:%02u",
+                     up / 3600, (up % 3600) / 60, up % 60);
+            inner += "<div>" + String(upBuf) + "</div>";
+        }
+        int shown = min((int)lines.size(), 12);
         for (int i = 0; i < shown; i++) {
             String line = lines[i];
             if (line.length() > 21) line = line.substring(0, 21);
