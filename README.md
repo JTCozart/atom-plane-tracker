@@ -283,7 +283,7 @@ After the first flash, all future updates can be applied wirelessly from the **U
 
 ### Building from source
 
-See [QUICKSTART.md](QUICKSTART.md) and the [Development](#development) section below.
+Clone the repo, copy `include/secrets.h.example` to `include/secrets.h`, fill in your credentials, then open the folder in VS Code with the PlatformIO extension. Use **Build** to compile and **Upload** to flash. See [Setup](#setup) above for full instructions.
 
 ---
 
