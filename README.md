@@ -13,7 +13,7 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 | Class | Background | Text | Basis |
 |---|---|---|---|
 | Military | Red | Black | API `mil` flag or `dbFlags` bit 0 |
-| Medevac / Air Life | Blue | White | FAA LIFEGUARD/MEDVAC callsign prefix or known operator |
+| Medevac / Air Life | Blue | White | FAA LIFEGUARD/MEDVAC/REACH/LIFEFLT callsign prefix, or owner contains EMS/LIFE FLIGHT/AIR EVAC/AIR METHODS/PHI AIR and others |
 | Commercial | Green | Black | ADS-B category A3/A4/A5 or ICAO airline code pattern |
 | Private / Other | Yellow | Black | Everything else |
 
@@ -48,11 +48,12 @@ Screen details:
 
 **Long press (0.8 s)** on the button from any screen enters debug mode. Long press again to exit and return to the previous screen.
 
-The debug screen shows the device IP address and raw data from the last API response:
+The debug screen shows device status and raw data from the last API response:
 
 ```
 DBG HTTP:200 ac:7
 IP: 192.168.1.42
+UP: 00:42:17
 A1B2C3 UAL123 B738
  cat:A3 mil:N 35000ft
 ---
@@ -66,8 +67,9 @@ D4E5F6 N12345 C172
 
 - **Line 1** — last HTTP status code and total aircraft count returned by the API.
 - **Line 2** — device IP address on the local network (see [Configuration web UI](#configuration-web-ui)).
+- **Line 3** — uptime since last boot (`HH:MM:SS`).
 - **Per aircraft** — ICAO hex, callsign or registration, ICAO type code, ADS-B category, military flag (`Y`/`N`), and barometric altitude.
-- **Short press** — scrolls down 13 lines at a time, wraps to top.
+- **Short press** — scrolls down 12 lines at a time, wraps to top.
 - **Double short press** (two taps within 400 ms) — sends a test ntfy notification and displays the HTTP response code for 1.5 seconds. Shows `ntfy not configured` if `NTFY_TOPIC` is empty.
 - Scroll position is preserved while in debug. Aircraft arrivals and departures do not exit debug mode.
 
@@ -93,7 +95,7 @@ The screen shows `SETUP MODE` with the connection details.
 
 Once connected the web server stays active on the device's normal IP address. Open a browser on any device on the same network and go to the IP shown on the debug screen (e.g. `http://192.168.1.42`).
 
-Both modes serve the same settings page, organised into three tabs:
+Both modes serve the same settings page, organised into four tabs:
 
 **WiFi tab**
 
@@ -118,6 +120,12 @@ Both modes serve the same settings page, organised into three tabs:
 | ntfy Topic | Leave blank to disable notifications |
 | ntfy Categories | Checkbox dropdown — select which aircraft classes trigger notifications. Leave all unchecked to notify for all classes. |
 
+An **Account Usage** box at the bottom of the Notifications tab shows messages sent, the account limit, and remaining quota for the current billing period (fetched live from `ntfy.sh/v1/account`). It loads automatically when the tab is opened and has a Refresh button.
+
+**API Test tab**
+
+Runs a live query to adsb.lol using the lat/lon/radius currently entered in the Detection tab (no need to save first). The raw JSON response is pretty-printed in a scrollable green-on-black terminal window. Useful for verifying coordinates and radius before committing them.
+
 **Save & Reboot** submits all values to on-device flash (NVS) and reboots. **NVS values take priority over `secrets.h`** on every subsequent boot.
 
 **Clear All Settings** (red button) erases all saved preferences and resets to `secrets.h` defaults. Shows a confirmation dialog to prevent accidental clearing.
@@ -126,7 +134,7 @@ After saving or clearing, the browser waits for the device to come back online a
 
 ### Live screen preview
 
-The settings page includes a live rendering of the device screen in a panel alongside the settings form. It refreshes every 5 seconds and shows the current mode — SCANNING, live aircraft, HISTORY, SUMMARY, or DEBUG — with colors matching the physical display. Control buttons below the preview switch the device between modes in real time.
+The settings page includes a live rendering of the device screen in a panel alongside the settings form. It refreshes every 5 seconds and shows the current mode — SCANNING, live aircraft, HISTORY, SUMMARY, or DEBUG — with colors matching the physical display. The SCANNING state renders the same animated radar sweep as the device display. Control buttons below the preview switch the device between modes in real time.
 
 ### Other features
 
@@ -249,7 +257,7 @@ Data comes from **[adsb.lol](https://adsb.lol)** — a community-run, free ADS-B
 GET https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{radius_nm}
 ```
 
-A commented fallback URL for [airplanes.live](https://airplanes.live) (`api.adsb.one`) is in `src/main.cpp` — identical response format, swap by uncommenting.
+A commented fallback URL for [airplanes.live](https://airplanes.live) (`api.adsb.one`) is in `src/AircraftStore.cpp` — identical response format, swap by uncommenting.
 
 ---
 
