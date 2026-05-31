@@ -10,6 +10,7 @@
 #include "OtaUpdater.h"
 #include "WebUI.h"
 #include "secrets.h"
+#include <esp_ota_ops.h>
 
 // ── Global instances ──────────────────────────────────────────────────────────
 
@@ -127,6 +128,15 @@ static void render() {
 
 void setup() {
     Serial.begin(115200);
+    delay(2000); // allow USB CDC to re-enumerate after reset
+
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    Serial.printf("[BOOT] partition: %s  offset: 0x%X\n",
+                  running ? running->label : "unknown",
+                  running ? running->address : 0);
+    Serial.printf("[BOOT] firmware: %s\n", OtaUpdater::currentVersion());
+    Serial.printf("[BOOT] reset reason: %d\n", (int)esp_reset_reason());
+
     auto m5cfg = M5.config();
     M5.begin(m5cfg);
 

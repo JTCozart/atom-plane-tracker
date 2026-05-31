@@ -58,12 +58,24 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
     http.begin(client, url);
     http.setTimeout(8000);
 
+    Serial.printf("[SCAN] GET %s\n", url);
     int httpCode = http.GET();
     _lastResponseCode = httpCode;
-    if (httpCode != 200) { http.end(); _consecutiveFailures++; return; }
+    Serial.printf("[SCAN] HTTP %d\n", httpCode);
+    if (httpCode != 200) {
+        http.end();
+        _consecutiveFailures++;
+        Serial.printf("[SCAN] fail - consecutive failures: %d\n", _consecutiveFailures);
+        return;
+    }
 
     JsonDocument doc;
-    if (deserializeJson(doc, http.getStream())) { http.end(); _consecutiveFailures++; return; }
+    if (deserializeJson(doc, http.getStream())) {
+        http.end();
+        _consecutiveFailures++;
+        Serial.println("[SCAN] JSON parse error");
+        return;
+    }
     http.end();
 
     _consecutiveFailures = 0;
@@ -71,6 +83,7 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
     // Rebuild debug lines from raw response
     JsonArray acArr = doc["ac"].as<JsonArray>();
     _lastAircraftCount = acArr.size();
+    Serial.printf("[SCAN] %d aircraft in range\n", _lastAircraftCount);
     _apiResponseLines.clear();
     for (JsonObject plane : acArr) {
         String icao = plane["hex"]      | "??????";  icao.toUpperCase();
@@ -142,6 +155,11 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
         _activeAircraft[icao] = aircraft;
         _detectionCounts[toIndex(classification)]++;
         recordInHistory(aircraft);
+
+        Serial.printf("[DETECT] %s %s %s  alt=%.0f  class=%d\n",
+                      icao.c_str(),
+                      callsign.length() ? callsign.c_str() : registration.c_str(),
+                      type.c_str(), alt, (int)classification);
 
         // Interrupt to live view and pin to this new aircraft
         _displayKey    = icao;

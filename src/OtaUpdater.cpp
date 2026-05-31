@@ -135,11 +135,11 @@ bool OtaUpdater::apply() {
 
     WiFiClientSecure client;
     client.setInsecure();
-    client.setTimeout(120000);
+    client.setTimeout(60);   // WiFiClientSecure timeout in seconds
     HTTPClient http;
     http.begin(client, _downloadUrl);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.setTimeout(120000);
+    http.setTimeout(60000);  // HTTPClient timeout in milliseconds (fits uint16_t)
 
     Serial.println("[OTA] starting GET request...");
     int code = http.GET();
@@ -183,18 +183,32 @@ bool OtaUpdater::apply() {
     http.end();
     Serial.printf("[OTA] writeStream() returned %d bytes written\n", (int)written);
     Serial.printf("[OTA] Update.progress(): %d\n", (int)Update.progress());
+    Serial.printf("[OTA] Update.isFinished(): %s\n", Update.isFinished() ? "true" : "false");
     Serial.printf("[OTA] Update.hasError(): %s  error code: %d\n",
                   Update.hasError() ? "true" : "false", Update.getError());
+
+    if (total > 0 && (int)written != total) {
+        showError("Incomplete: " + String(written) + "/" + String(total));
+        Update.abort();
+        return false;
+    }
 
     if (Update.hasError()) {
         showError("Write err: " + String(Update.getError()));
         return false;
     }
 
-    Serial.println("[OTA] calling Update.end(true)...");
-    bool ended = Update.end(true);
+    if (!Update.isFinished()) {
+        showError("Not finished");
+        Update.abort();
+        return false;
+    }
+
+    Serial.println("[OTA] calling Update.end()...");
+    bool ended = Update.end();
     Serial.printf("[OTA] Update.end() returned: %s  error code: %d\n",
                   ended ? "true" : "false", Update.getError());
+    Serial.printf("[OTA] Update.isFinished() after end: %s\n", Update.isFinished() ? "true" : "false");
 
     if (!ended) {
         showError("End err: " + String(Update.getError()));
