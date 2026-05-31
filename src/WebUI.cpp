@@ -425,7 +425,8 @@ void WebUI::handleRoot() {
         String commChk = (hasFilter && strstr(f, "COMM"))   ? " checked" : "";
         String privChk = (hasFilter && strstr(f, "PRIV"))   ? " checked" : "";
 
-        html += "<label>ntfy Categories</label>"
+        String updChk = _cfg.notifyUpdates ? " checked" : "";
+        html += "<label>ntfy Notification Categories</label>"
                 "<div class='chk-wrap' id='catWrap'>"
                 "<button type='button' class='chk-btn' id='catBtn' onclick='toggleCats()'>"
                 "All categories&nbsp;<i class='fa-solid fa-chevron-down' style='font-size:.75em'></i>"
@@ -435,6 +436,7 @@ void WebUI::handleRoot() {
                 "<label class='chk-item'><input type='checkbox' value='MEDVAC' data-label='Medevac'"  + medChk  + " onchange='updateCats()'> Medevac</label>"
                 "<label class='chk-item'><input type='checkbox' value='COMM'   data-label='Commercial'" + commChk + " onchange='updateCats()'> Commercial</label>"
                 "<label class='chk-item'><input type='checkbox' value='PRIV'   data-label='Private'"  + privChk + " onchange='updateCats()'> Private</label>"
+                "<label class='chk-item'><input type='checkbox' name='ntfyUpdates' value='1'" + updChk + "> Updates</label>"
                 "</div>"
                 "<input type='hidden' name='ntfyClasses' id='ntfyClasses' value='" + String(f) + "'>"
                 "</div>";
@@ -572,6 +574,7 @@ void WebUI::handleSave() {
         prefs.putString("ntfyTopic",   _server.arg("ntfyTopic"));
     if (_server.hasArg("ntfyClasses"))
         prefs.putString("ntfyClasses", _server.arg("ntfyClasses"));
+    prefs.putBool("ntfyUpdates", _server.hasArg("ntfyUpdates"));
 
     prefs.end();
 

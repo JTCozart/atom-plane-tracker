@@ -118,7 +118,7 @@ Both modes serve the same settings page, organised into four tabs:
 |---|---|
 | ntfy Token | Leave blank to keep the current token |
 | ntfy Topic | Leave blank to disable notifications |
-| ntfy Categories | Checkbox dropdown - select which aircraft classes trigger notifications. Leave all unchecked to notify for all classes. |
+| ntfy Notification Categories | Checkbox dropdown - select which events trigger notifications. Aircraft classes: Military, Medevac, Commercial, Private. Leave all unchecked to notify for all classes. **Updates** (on by default) sends a push when new firmware is available. |
 
 An **Account Usage** box at the bottom of the Notifications tab shows messages sent, the account limit, and remaining quota for the current billing period (fetched live from `ntfy.sh/v1/account`). It loads automatically when the tab is opened and has a Refresh button.
 
@@ -155,6 +155,8 @@ The firmware can send push notifications via [ntfy.sh](https://ntfy.sh) when an 
 | Private | Low | 🛩️ |
 
 Each notification includes a **Track Flight** action button that opens the live flight on [ADS-B Exchange](https://globe.adsbexchange.com) using the aircraft's ICAO hex code. All notifications use a radar dish icon (📡).
+
+A separate **firmware update** notification is sent when a new release is detected (arrow_up tag, default priority). This can be toggled off under **ntfy Notification Categories** in the web UI.
 
 Configure in `secrets.h` (compile-time defaults) or via the **configuration web UI** (saved to NVS, takes priority):
 
@@ -285,12 +287,6 @@ See [QUICKSTART.md](QUICKSTART.md) and the [Development](#development) section b
 
 ---
 
-## Getting started
-
-New to the project? Start with **[QUICKSTART.md](QUICKSTART.md)** - a step-by-step guide for first-time setup without needing to understand the code.
-
----
-
 ## Project structure
 
 ```
@@ -306,6 +302,7 @@ atom-plane-tracker/
 │   ├── Config.h/cpp            # Configuration struct, NVS persistence
 │   ├── Display.h/cpp           # All display drawing (including animated scanning)
 │   ├── Notifier.h/cpp          # ntfy.sh push notifications
+│   ├── OtaUpdater.h/cpp        # GitHub release check and OTA firmware update
 │   └── WebUI.h/cpp             # HTTP server, configuration web UI
 ├── include/
 │   ├── secrets.h               # Your credentials - gitignored, never committed
@@ -314,3 +311,9 @@ atom-plane-tracker/
 ```
 
 **Architecture**: Refactored to follow SOLID principles. Thin `main.cpp` orchestrates independent, single-responsibility classes.
+
+---
+
+## Getting started
+
+New to the project and have a factory device? Start with **[QUICKSTART.md](QUICKSTART.md)** - step-by-step from first flash to live aircraft tracking, no software installation required.

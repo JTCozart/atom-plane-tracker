@@ -48,6 +48,7 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
 
 void Notifier::notifyUpdate(const String& newVersion, const Config& config) {
     if (strlen(config.notifyToken) == 0 || strlen(config.notifyTopic) == 0) return;
+    if (!config.notifyUpdates) return;
 
     WiFiClientSecure client;
     client.setInsecure();

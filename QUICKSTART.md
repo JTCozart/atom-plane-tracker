@@ -1,30 +1,51 @@
-﻿# Quick Start Guide
+# Quick Start Guide
 
-This guide walks you through setting up your **atom-plane-tracker** if it came preloaded with default settings.
+This guide walks you through flashing and configuring your **atom-plane-tracker** on a brand-new M5Stack Atom S3R straight from the factory.
 
 ---
 
 ## What you'll need
 
-- **atom-plane-tracker device** (M5Stack Atom S3R)
+- **M5Stack Atom S3R** (with USB-C cable)
 - **Smartphone or laptop**
 - **WiFi network** at your location
-- **Internet browser** (Chrome, Safari, Firefox, etc.)
-- **5 minutes**
+- **Chrome, Edge, or any Chromium browser** (required for the flash step)
+- **10 minutes**
 
 ---
 
-## Step 1: Power on the device
+## Step 1: Flash the firmware
 
-Connect the device to power via USB-C. The screen will display:
+The Atom S3R ships blank. You need to load the tracker firmware once using a browser-based tool - no software installation required.
+
+### 1a. Download the firmware
+
+1. Go to the [latest release](https://github.com/JTCozart/atom-plane-tracker/releases/latest)
+2. Download the file ending in **`-initial-flash.bin`** (e.g. `atom-plane-tracker-v20260531.1234-initial-flash.bin`)
+
+> Download the `-initial-flash.bin` file, not the plain `.bin`. The initial-flash version includes the bootloader and is required for first-time setup.
+
+### 1b. Open the flash tool
+
+1. In **Chrome or Edge**, go to: **[https://adafruit.github.io/Adafruit_WebSerial_ESPTool/](https://adafruit.github.io/Adafruit_WebSerial_ESPTool/)**
+2. Connect the Atom S3R to your computer via USB-C
+
+### 1c. Connect and flash
+
+1. Click **Connect** in the top-right corner
+2. Select the serial port for your device (it will appear as a USB serial device)
+3. Click **Erase** to wipe the chip, then wait for it to complete
+4. Under **Program**, set the address to **`0x0`**
+5. Click **Choose a file** and select the `-initial-flash.bin` you downloaded
+6. Click **Program** and wait until it says complete
+
+The device will reboot automatically. The screen will show:
 
 ```
 SETUP MODE
 SSID: PlaneTracker
 Pass: PlaneTracker
 ```
-
-This means the device is broadcasting its own WiFi hotspot and waiting to be configured.
 
 ---
 
@@ -50,7 +71,7 @@ If the page doesn't load, try refreshing (Ctrl+R or Cmd+R).
 
 ## Step 4: Configure all your settings
 
-Fill in all three tabs before saving - this way the device only needs to reboot once.
+Fill in all tabs before saving - this way the device only needs to reboot once.
 
 ### WiFi tab
 
@@ -64,24 +85,24 @@ Fill in all three tabs before saving - this way the device only needs to reboot 
 | Field | What to enter |
 |---|---|
 | **Latitude / Longitude** | Your location - use the **Pick on map** button to drop a pin instead of typing coordinates manually |
-| **Search Radius (NM)** | How far to scan for aircraft in nautical miles. 10 NM ≈ 11.5 statute miles is a good starting point |
+| **Search Radius (NM)** | How far to scan for aircraft in nautical miles. 10 NM is a good starting point |
 | **Scan Interval (s)** | How often to poll for aircraft in seconds. Default: 15. **Minimum: 10** |
 
-> **Tip:** Before saving, click the **API Test** tab and press **Run Test**. The device will fire a live query using the coordinates and radius you entered and show the raw JSON response. If you see aircraft you're all set; if it's empty try increasing the radius.
+> **Tip:** Before saving, click the **API Test** tab and press **Run Test**. The device fires a live query using the coordinates and radius you entered and shows the raw JSON response. If you see aircraft you're all set; if it's empty try increasing the radius.
 
-### Notifications tab (optional - skip if you don't want push alerts)
+### Notifications tab (optional)
 
-See [Step 6](#step-6-optional-set-up-push-notifications) for how to get an ntfy token and topic first - you can always come back to this after the initial setup.
+See [Step 6](#step-6-optional-set-up-push-notifications) for how to get an ntfy token and topic - you can always come back to this after the initial setup.
 
 ---
 
 ## Step 5: Save & find your IP address
 
-Click **Save & Reboot**. The device will save all settings, reboot, and join your home WiFi network - this takes about 10–15 seconds.
+Click **Save & Reboot**. The device saves all settings, reboots, and joins your home WiFi - this takes about 10-15 seconds.
 
 **Switch your phone/laptop back to your home WiFi network.**
 
-Now find the device's new IP address so you can access the settings page in the future:
+Now find the device's new IP address:
 
 1. **Long-press the button on the device for 0.8 seconds** to enter debug mode
 2. The screen shows:
@@ -97,7 +118,7 @@ UP: 00:00:42
 4. **Long-press again** to exit debug and return to scanning
 5. Open **`http://192.168.1.XX`** in your browser - this is your settings page from now on
 
-> **Bookmark it.** Any time you want to change settings, just open this address in your browser. You can also find the IP from your router's connected devices list if you forget it.
+> **Bookmark it.** Any time you want to change settings, open this address in your browser. You can also find the IP from your router's connected devices list if you forget it.
 
 ---
 
@@ -131,11 +152,11 @@ If you want your phone to alert you when aircraft pass overhead:
 |---|---|
 | **ntfy Token** | Your access token from step 6b |
 | **ntfy Topic** | Your unique topic name |
-| **ntfy Categories** | Which aircraft classes trigger alerts - leave all unchecked to notify for everything |
+| **ntfy Notification Categories** | Which events trigger alerts - leave all unchecked to notify for everything. **Updates** (checked by default) sends a push when new firmware is available. |
 
 4. Click **Save & Reboot**
 
-Whenever an aircraft enters your radius you'll receive a push notification with a **Track Flight** button that opens the live flight on ADS-B Exchange.
+Whenever an aircraft enters your radius you'll get a push notification with a **Track Flight** button that opens the live flight on ADS-B Exchange.
 
 > **Tip:** After saving, open the Notifications tab and check the **Account Usage** box to confirm your remaining daily quota.
 
@@ -149,6 +170,10 @@ The device is now scanning for aircraft over your location. Here's what to expec
 - **Colored screen with flight info** - an aircraft is overhead; shows callsign, type, altitude, and ETA until it leaves your radius
 - The web UI's live preview mirrors the device screen and refreshes every 5 seconds
 
+### Future firmware updates
+
+The device checks for new firmware releases automatically every 24 hours. If you enabled **Updates** notifications you'll get a push alert when one is available. You can also check manually in the **Update** tab of the settings page and install with one click - no computer required.
+
 ### Coming back to change settings
 
 Open **`http://192.168.1.XX`** (the IP from Step 5) in any browser on your home network, make your changes, and click **Save & Reboot**.
@@ -159,7 +184,7 @@ Open **`http://192.168.1.XX`** (the IP from Step 5) in any browser on your home 
 
 ### Device won't connect to WiFi after setup
 
-- The device will fall back to setup mode (broadcasting `PlaneTracker` hotspot) if it can't reach the network - reconnect to `192.168.4.1` and double-check the SSID and password
+The device falls back to setup mode (broadcasting `PlaneTracker` hotspot) if it can't reach the network. Reconnect to `192.168.4.1` and double-check the SSID and password.
 
 ### Can't find `192.168.4.1`
 
@@ -168,7 +193,7 @@ Open **`http://192.168.1.XX`** (the IP from Step 5) in any browser on your home 
 
 ### Can't find the device's IP after it joins home WiFi
 
-- Long-press the button on the device → IP is on line 2 of the debug screen
+- Long-press the button on the device - IP is on line 2 of the debug screen
 - Check the connected devices list in your router's admin page
 
 ### Not getting notifications
@@ -179,7 +204,7 @@ Open **`http://192.168.1.XX`** (the IP from Step 5) in any browser on your home 
 ### Debug screen shows HTTP error or no aircraft ever appear
 
 - Long-press the button to enter debug mode and check the HTTP status code on line 1
-- Use the **API Test** tab on the settings page to run a live query and inspect the raw response
+- Use the **API Test** tab to run a live query and inspect the raw response
 - Try increasing the search radius
 
 ---

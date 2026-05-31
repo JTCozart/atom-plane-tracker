@@ -11,6 +11,7 @@ struct Config {
     char     notifyToken[128];
     char     notifyTopic[64];
     char     notifyClassFilter[32];
+    bool     notifyUpdates;
 
     static constexpr uint32_t kMinPollIntervalMs = 10000;
 

@@ -25,6 +25,7 @@ void Config::load() {
     strncpy(notifyToken,       prefs.getString("ntfyToken",   NTFY_TOKEN).c_str(),   sizeof(notifyToken)       - 1);
     strncpy(notifyTopic,       prefs.getString("ntfyTopic",   NTFY_TOPIC).c_str(),   sizeof(notifyTopic)       - 1);
     strncpy(notifyClassFilter, prefs.getString("ntfyClasses", NTFY_CLASSES).c_str(), sizeof(notifyClassFilter) - 1);
+    notifyUpdates = prefs.getBool("ntfyUpdates", true);
     prefs.end();
 }
 
