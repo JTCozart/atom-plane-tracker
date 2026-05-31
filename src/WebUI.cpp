@@ -28,8 +28,6 @@ void WebUI::begin(ScreenMode& mode, bool isSetupMode) {
     _server.on("/api-test",    HTTP_GET,  [this]() { handleApiTest();    });
     _server.on("/ota-check",    HTTP_GET,  [this]() { handleOtaCheck();    });
     _server.on("/ota-update",   HTTP_POST, [this]() { handleOtaUpdate();   });
-    _server.on("/ota-releases", HTTP_GET,  [this]() { handleOtaReleases(); });
-    _server.on("/ota-install",  HTTP_POST, [this]() { handleOtaInstall();  });
     _server.begin();
 }
 
@@ -346,43 +344,6 @@ void WebUI::handleRoot() {
               "document.getElementById('otaUpdateBtn').disabled=false;"
             "});"
           "}"
-          "function loadReleases(){"
-            "var btn=document.getElementById('otaLoadBtn');"
-            "btn.disabled=true;btn.innerHTML='<i class=\"fa-solid fa-spinner fa-spin\" style=\"margin-right:6px\"></i>Loading...';"
-            "fetch('/ota-releases')"
-            ".then(function(r){return r.json();})"
-            ".then(function(list){"
-              "var sel=document.getElementById('otaReleaseSelect');"
-              "sel.innerHTML='<option value=\"\">-- select a version --</option>';"
-              "list.forEach(function(r){"
-                "var o=document.createElement('option');"
-                "o.value=r.url;o.textContent=r.tag;"
-                "sel.appendChild(o);"
-              "});"
-              "document.getElementById('otaOverrideStatus').textContent=list.length+' version(s) available';"
-              "btn.disabled=false;btn.innerHTML='<i class=\"fa-solid fa-list\" style=\"margin-right:6px\"></i>Load Available Versions';"
-            "}).catch(function(){"
-              "document.getElementById('otaOverrideStatus').textContent='Failed to load releases';"
-              "btn.disabled=false;btn.innerHTML='<i class=\"fa-solid fa-list\" style=\"margin-right:6px\"></i>Load Available Versions';"
-            "});"
-          "}"
-          "function doOtaInstall(){"
-            "var sel=document.getElementById('otaReleaseSelect');"
-            "var tag=sel.options[sel.selectedIndex].textContent;"
-            "var url=sel.value;"
-            "if(!url)return;"
-            "if(!confirm('Install '+tag+'? The device will reboot. This may be an older version.'))return;"
-            "document.getElementById('otaInstallBtn').disabled=true;"
-            "document.getElementById('otaOverrideStatus').textContent='Downloading - please wait up to 60 seconds...';"
-            "var fd=new FormData();fd.append('url',url);fd.append('version',tag);"
-            "fetch('/ota-install',{method:'POST',body:fd})"
-            ".then(function(r){return r.text();})"
-            ".then(function(t){document.open();document.write(t);document.close();})"
-            ".catch(function(e){"
-              "document.getElementById('otaOverrideStatus').textContent='Request failed: '+e;"
-              "document.getElementById('otaInstallBtn').disabled=false;"
-            "});"
-          "}"
           "function toggleFullscreen(){"
             "var el=document.getElementById('liveWrap');"
             "if(!document.fullscreenElement){el.requestFullscreen().catch(function(){});}"
@@ -528,26 +489,6 @@ void WebUI::handleRoot() {
             "style='display:none;margin-top:8px;padding:8px 14px;background:#1976D2;color:#fff;"
             "border:none;border-radius:4px;cursor:pointer;font-size:.9em;width:100%'>"
             "<i class='fa-solid fa-cloud-arrow-down' style='margin-right:6px'></i>Update Now</button>";
-    html += "<hr style='margin:16px 0;border:none;border-top:1px solid #ccc'>";
-    html += "<label style='font-size:.85em;font-weight:600'>Version Override</label>"
-            "<p style='margin:4px 0 8px;font-size:.8em;color:#666'>"
-            "Install any release, including older versions.</p>";
-    html += "<select id='otaReleaseSelect' "
-            "onchange='var b=document.getElementById(\"otaInstallBtn\");var ok=this.value!=\"\";b.disabled=!ok;b.style.opacity=ok?\"1\":\"0.5\";' "
-            "style='width:100%;padding:7px;border:1px solid #ccc;border-radius:4px;"
-            "background:#f5f5f5;font-family:monospace;font-size:.9em'>"
-            "<option value=''>-- select a version --</option>"
-            "</select>";
-    html += "<button type='button' id='otaLoadBtn' onclick='loadReleases()' "
-            "style='margin-top:6px;padding:7px 14px;background:#546E7A;color:#fff;"
-            "border:none;border-radius:4px;cursor:pointer;font-size:.85em;width:100%'>"
-            "<i class='fa-solid fa-list' style='margin-right:6px'></i>Load Available Versions</button>";
-    html += "<button type='button' id='otaInstallBtn' onclick='doOtaInstall()' disabled "
-            "style='margin-top:6px;padding:7px 14px;background:#E65100;color:#fff;"
-            "border:none;border-radius:4px;cursor:pointer;font-size:.85em;width:100%;"
-            "opacity:.5'>"
-            "<i class='fa-solid fa-rotate-left' style='margin-right:6px'></i>Install Selected Version</button>";
-    html += "<div id='otaOverrideStatus' style='margin-top:6px;font-size:.8em;color:#666'></div>";
     html += "</div>";
 
     html += "</div></div>"; // end tabs + card
@@ -1023,30 +964,3 @@ void WebUI::handleOtaUpdate() {
     }
 }
 
-void WebUI::handleOtaReleases() {
-    String json = _ota.fetchAllReleases();
-    _server.send(200, "application/json", json);
-}
-
-void WebUI::handleOtaInstall() {
-    String url     = _server.arg("url");
-    String version = _server.arg("version");
-
-    if (url.isEmpty() || version.isEmpty()) {
-        _server.send(400, "text/plain", "Missing url or version");
-        return;
-    }
-
-    _ota.setTarget(url, version);
-
-    if (_ota.apply()) {
-        _server.send(200, "text/html",
-                     buildRebootPage("Install Successful",
-                                     "Rebooting to " + version + "&hellip;"));
-        delay(500);
-        ESP.restart();
-    } else {
-        _server.send(200, "text/html",
-                     buildRebootPage("Install Failed", _ota.statusMessage()));
-    }
-}

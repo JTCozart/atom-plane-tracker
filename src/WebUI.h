@@ -48,8 +48,6 @@ private:
     void handleApiTest();
     void handleOtaCheck();
     void handleOtaUpdate();
-    void handleOtaReleases();
-    void handleOtaInstall();
 
     String buildScreenDiv();
     static String buildRebootPage(const String& heading, const String& subtext);
