@@ -52,7 +52,7 @@ void WebUI::handleRoot() {
           "color:#fff;border:none;font-size:1em;cursor:pointer;border-radius:4px}"
           ".layout{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}"
           ".form-col{flex:1;min-width:280px}"
-          ".preview-col{flex:0 0 auto;text-align:center}"
+          ".preview-col{flex:0 0 auto;text-align:center;order:-1}"
           "#scr{width:256px;height:256px;display:inline-block;position:relative;"
           "font-family:monospace;font-size:12px;padding:6px;box-sizing:border-box;"
           "border:4px solid #222;border-radius:6px;overflow:hidden;text-align:left}"
