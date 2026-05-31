@@ -947,12 +947,17 @@ void WebUI::handleOtaCheck() {
 }
 
 void WebUI::handleOtaUpdate() {
+    // Send the waiting page before the long-running apply() blocks the server.
+    // On success the device reboots; on failure the display shows the error
+    // and the browser's polling reconnects to the still-running old firmware.
     _server.send(200, "text/html",
                  buildRebootPage("Updating Firmware",
                                  "Downloading " + _ota.latestVersion() + "&hellip;"));
     delay(200);
     if (_ota.apply()) {
-        delay(1000);
+        delay(500);
         ESP.restart();
     }
+    // apply() failed - error is shown on the physical display.
+    // Device keeps running so the user can diagnose and retry.
 }

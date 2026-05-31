@@ -77,9 +77,21 @@ bool OtaUpdater::apply() {
     if (_downloadUrl.isEmpty()) { _status = "No download URL"; return false; }
 
     auto& disp = M5.Display;
-    uint16_t black = disp.color565(0, 0, 0);
+    uint16_t black = disp.color565(0,   0,   0);
     uint16_t white = disp.color565(255, 255, 255);
-    uint16_t green = disp.color565(0, 200, 0);
+    uint16_t green = disp.color565(0,   200, 0);
+    uint16_t red   = disp.color565(255, 0,   0);
+
+    auto showError = [&](const String& msg) {
+        _status = msg;
+        disp.fillScreen(red);
+        disp.setTextColor(black, red);
+        disp.setTextSize(1);
+        disp.setCursor(2, 4);
+        disp.print("OTA FAILED");
+        disp.setCursor(2, 20);
+        disp.print(msg.substring(0, 21));
+    };
 
     disp.fillScreen(black);
     disp.setTextColor(white, black);
@@ -89,6 +101,7 @@ bool OtaUpdater::apply() {
 
     WiFiClientSecure client;
     client.setInsecure();
+    client.setTimeout(120000);
     HTTPClient http;
     http.begin(client, _downloadUrl);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
@@ -97,15 +110,15 @@ bool OtaUpdater::apply() {
     int code = http.GET();
     if (code != 200) {
         http.end();
-        _status = "Download failed (HTTP " + String(code) + ")";
+        showError("HTTP " + String(code));
         return false;
     }
 
-    int total = http.getSize(); // may be -1 if server omits Content-Length
+    int total = http.getSize(); // -1 if server omits Content-Length
 
     if (!Update.begin(total > 0 ? total : UPDATE_SIZE_UNKNOWN)) {
         http.end();
-        _status = "Not enough flash space";
+        showError("Begin failed: " + String(Update.getError()));
         return false;
     }
 
@@ -121,8 +134,13 @@ bool OtaUpdater::apply() {
     Update.writeStream(*http.getStreamPtr());
     http.end();
 
+    if (Update.hasError()) {
+        showError("Write err: " + String(Update.getError()));
+        return false;
+    }
+
     if (!Update.end(true)) {
-        _status = "Finalize failed (err " + String(Update.getError()) + ")";
+        showError("End err: " + String(Update.getError()));
         return false;
     }
 
