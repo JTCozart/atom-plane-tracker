@@ -140,7 +140,7 @@ void WebUI::handleRoot() {
               "ctx.fillStyle='#00ff00';ctx.font='bold 12px monospace';"
               "var tw=ctx.measureText('SCANNING').width;"
               "ctx.fillText('SCANNING',(256-tw)/2,200);"
-              "fr++;window._radarRaf=requestAnimationFrame(draw);"
+              "fr+=0.5;window._radarRaf=requestAnimationFrame(draw);"
             "}"
             "draw();"
           "}"
