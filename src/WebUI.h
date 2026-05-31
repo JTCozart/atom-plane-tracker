@@ -43,6 +43,7 @@ private:
     void handleScreen();
     void handleNotifyTest();
     void handleNtfyStats();
+    void handleApiTest();
 
     String buildScreenDiv();        // shared by handleScreen() and handleRoot() fragment
     static String buildRebootPage(const String& heading, const String& subtext);

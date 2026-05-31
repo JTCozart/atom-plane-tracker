@@ -25,6 +25,7 @@ void WebUI::begin(ScreenMode& mode, bool isSetupMode) {
     _server.on("/screen",      HTTP_GET,  [this]() { handleScreen();     });
     _server.on("/notify-test", HTTP_POST, [this]() { handleNotifyTest(); });
     _server.on("/ntfy-stats",  HTTP_GET,  [this]() { handleNtfyStats();  });
+    _server.on("/api-test",    HTTP_GET,  [this]() { handleApiTest();    });
     _server.begin();
 }
 
@@ -113,6 +114,10 @@ void WebUI::handleRoot() {
           "body.dark a{color:#64b5f6}"
           "body.dark #ntfyUsage{color:#aaa}"
           "body.dark .usage-box{border-color:#444}"
+          "#apiOut{background:#111;color:#00ff00;font-family:monospace;font-size:11px;"
+          "padding:10px;border-radius:4px;height:320px;overflow-y:auto;"
+          "white-space:pre-wrap;word-break:break-all;margin-top:10px;"
+          "border:1px solid #333}"
           "</style>"
           "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
           "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css'>"
@@ -209,6 +214,25 @@ void WebUI::handleRoot() {
               "if(btn){btn.disabled=false;btn.textContent='Refresh';}"
             "});"
           "}"
+          "function runApiTest(){"
+            "var btn=document.getElementById('apiBtn');"
+            "var pre=document.getElementById('apiOut');"
+            "var lat=document.querySelector('[name=lat]').value||'" + String(_cfg.latitude, 6) + "';"
+            "var lon=document.querySelector('[name=lon]').value||'" + String(_cfg.longitude, 6) + "';"
+            "var rad=document.querySelector('[name=radius]').value||'" + String(_cfg.radius) + "';"
+            "btn.disabled=true;btn.textContent='Fetching...';"
+            "pre.textContent='Waiting for response...';"
+            "fetch('/api-test?lat='+lat+'&lon='+lon+'&radius='+rad)"
+            ".then(function(r){return r.text();})"
+            ".then(function(t){"
+              "try{pre.textContent=JSON.stringify(JSON.parse(t),null,2);}"
+              "catch(e){pre.textContent=t;}"
+              "btn.disabled=false;btn.textContent='Run Test';"
+            "}).catch(function(e){"
+              "pre.textContent='Error: '+e;"
+              "btn.disabled=false;btn.textContent='Run Test';"
+            "});"
+          "}"
           "function testNotify(btn){"
             "btn.disabled=true;btn.textContent='Sending...';"
             "fetch('/notify-test',{method:'POST'})"
@@ -279,6 +303,8 @@ void WebUI::handleRoot() {
             "<i class='fa-solid fa-satellite-dish'></i><br>Detection</button>"
             "<button type='button' class='tab-btn' data-tab='notify'  onclick='showTab(\"notify\")'>"
             "<i class='fa-solid fa-bell'></i><br>Notifications</button>"
+            "<button type='button' class='tab-btn' data-tab='apitest' onclick='showTab(\"apitest\")'>"
+            "<i class='fa-solid fa-terminal'></i><br>API Test</button>"
             "</div>";
 
     // ── WiFi tab ──────────────────────────────────────────────────────────────
@@ -357,6 +383,18 @@ void WebUI::handleRoot() {
             "</div>"
             "<div id='ntfyUsage' style='color:#666'>Loading&hellip;</div>"
             "</div>";
+    html += "</div>";
+
+    // ── API Test tab ──────────────────────────────────────────────────────────
+    html += "<div class='tab-panel' id='tab-apitest'>";
+    html += "<p style='margin:0 0 10px;font-size:.85em;color:#666'>"
+            "<i class='fa-solid fa-circle-info' style='margin-right:4px'></i>"
+            "Runs a live query using the lat/lon/radius currently in the Detection tab.</p>";
+    html += "<button type='button' id='apiBtn' onclick='runApiTest()' "
+            "style='padding:8px 14px;background:#37474F;color:#fff;"
+            "border:none;border-radius:4px;cursor:pointer;font-size:.9em;width:100%'>"
+            "<i class='fa-solid fa-play' style='margin-right:6px'></i>Run Test</button>";
+    html += "<pre id='apiOut'>Press Run Test to execute a query.</pre>";
     html += "</div>";
 
     html += "</div></div>"; // end tabs + card
@@ -480,6 +518,34 @@ void WebUI::handleNotifyTest() {
     }
     int code = Notifier::sendTestHttp(_cfg);
     _server.send(200, "text/plain", String(code));
+}
+
+void WebUI::handleApiTest() {
+    double lat    = _server.hasArg("lat")    ? _server.arg("lat").toDouble()   : _cfg.latitude;
+    double lon    = _server.hasArg("lon")    ? _server.arg("lon").toDouble()   : _cfg.longitude;
+    float  radius = _server.hasArg("radius") ? _server.arg("radius").toFloat() : _cfg.radius;
+
+    char url[128];
+    snprintf(url, sizeof(url),
+             "https://api.adsb.lol/v2/lat/%.6f/lon/%.6f/dist/%.1f", lat, lon, radius);
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, url);
+    http.setTimeout(8000);
+    int code = http.GET();
+
+    if (code != 200) {
+        http.end();
+        _server.send(200, "application/json",
+                     "{\"error\":\"HTTP " + String(code) + "\",\"url\":\"" + url + "\"}");
+        return;
+    }
+
+    String payload = http.getString();
+    http.end();
+    _server.send(200, "application/json", payload);
 }
 
 void WebUI::handleNtfyStats() {
