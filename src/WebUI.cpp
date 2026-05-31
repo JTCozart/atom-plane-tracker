@@ -155,6 +155,22 @@ void WebUI::handleRoot() {
             "}"
             "draw();"
           "}"
+          "var _etaInterval=null;"
+          "function startEtaCountdown(){"
+            "if(_etaInterval)clearInterval(_etaInterval);"
+            "var cells=document.querySelectorAll('[data-eta]');"
+            "if(!cells.length)return;"
+            "var start=Date.now();"
+            "cells.forEach(function(c){c._etaStart=parseInt(c.dataset.eta);});"
+            "_etaInterval=setInterval(function(){"
+              "var elapsed=Math.round((Date.now()-start)/1000);"
+              "cells.forEach(function(c){"
+                "var rem=c._etaStart-elapsed;"
+                "if(rem<=0){c.textContent='0:00';return;}"
+                "c.textContent=Math.floor(rem/60)+':'+(rem%60<10?'0':'')+(rem%60);"
+              "});"
+            "},1000);"
+          "}"
           "function refresh(){"
             "fetch('/screen?fragment=1')"
             ".then(function(r){return r.text();})"
@@ -164,6 +180,7 @@ void WebUI::handleRoot() {
               "if(e)e.innerHTML=h;"
               "var rc=document.getElementById('rc');"
               "if(rc)startRadar(rc);"
+              "startEtaCountdown();"
             "})"
             ".catch(function(){});"
           "}"
@@ -829,7 +846,9 @@ String WebUI::buildScreenDiv() {
                     "</td>"
                     "<td style='padding:2px 4px'>" + String(ac.type.length() ? ac.type.c_str() : "?") + "</td>"
                     "<td style='text-align:right;padding:2px 4px'>" + altStr + "</td>"
-                    "<td style='text-align:right;padding:2px 4px'>" + String(etaBuf) + "</td>"
+                    "<td style='text-align:right;padding:2px 4px'" +
+                    (eta >= 0 ? " data-eta='" + String(eta) + "'" : "") +
+                    ">" + String(etaBuf) + "</td>"
                     "</tr>";
         }
         html += "</tbody></table>";
