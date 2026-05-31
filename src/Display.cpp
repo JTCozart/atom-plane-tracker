@@ -106,15 +106,12 @@ void Display::showScanning() {
         _scanCanvas->drawLine(cx, cy, x2, y2, trailColors[t]);
     }
 
-    // "SCANNING..." label with animated dot count
+    // "SCANNING" label
     _scanCanvas->setTextColor(brightGreen, _colorBlack);
     _scanCanvas->setTextSize(1);
-    int    dotCount = (_scanAnimFrame / (kFramesPerRev / 4)) % 4;
-    String label    = "SCANNING";
-    for (int i = 0; i < dotCount; i++) label += '.';
-    int labelX = (128 - (int)label.length() * 6) / 2;
-    _scanCanvas->setCursor(max(0, labelX), 100);
-    _scanCanvas->print(label);
+    int labelX = (128 - 7 * 6) / 2;  // 7 chars * 6px
+    _scanCanvas->setCursor(labelX, 100);
+    _scanCanvas->print("SCANNING");
 
     // Single atomic transfer to the physical display — no partial-frame flicker
     _scanCanvas->pushSprite(0, 0);
