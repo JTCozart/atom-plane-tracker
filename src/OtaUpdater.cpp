@@ -1,0 +1,141 @@
+#include "OtaUpdater.h"
+#include <M5Unified.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <Update.h>
+
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "dev"
+#endif
+
+static const char* kReleasesApi =
+    "https://api.github.com/repos/JTCozart/atom-plane-tracker/releases/latest";
+
+const char* OtaUpdater::currentVersion() { return FIRMWARE_VERSION; }
+
+bool OtaUpdater::isDue() const {
+    if (!_everChecked) return millis() >= kFirstCheckMs;
+    return (millis() - _lastCheckMs) >= kCheckIntervalMs;
+}
+
+bool OtaUpdater::check() {
+    _everChecked = true;
+    _lastCheckMs = millis();
+    _hasUpdate   = false;
+    _status      = "Checking...";
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, kReleasesApi);
+    http.addHeader("User-Agent", "atom-plane-tracker");
+    int code = http.GET();
+    if (code != 200) {
+        http.end();
+        _status = "Check failed (HTTP " + String(code) + ")";
+        return false;
+    }
+
+    JsonDocument filter;
+    filter["tag_name"]                          = true;
+    filter["html_url"]                          = true;
+    filter["assets"][0]["name"]                 = true;
+    filter["assets"][0]["browser_download_url"] = true;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, http.getStream(),
+                                               DeserializationOption::Filter(filter));
+    http.end();
+    if (err) { _status = "Parse error"; return false; }
+
+    _latestVersion = doc["tag_name"] | "";
+    _releaseUrl    = doc["html_url"] | "";
+    _downloadUrl   = "";
+
+    for (JsonObject asset : doc["assets"].as<JsonArray>()) {
+        String name = asset["name"] | "";
+        if (name.endsWith(".bin")) {
+            _downloadUrl = asset["browser_download_url"] | "";
+            break;
+        }
+    }
+
+    if (_latestVersion.isEmpty()) { _status = "No release found"; return false; }
+
+    String cur = currentVersion();
+    // Tags are date-based (vYYYYMMDD.HHMM) so lexicographic comparison is correct.
+    _hasUpdate = (cur != "dev" && _latestVersion != cur && _latestVersion > cur);
+    _status    = _hasUpdate ? "Update available" : "Up to date";
+    return _hasUpdate;
+}
+
+bool OtaUpdater::apply() {
+    if (_downloadUrl.isEmpty()) { _status = "No download URL"; return false; }
+
+    auto& disp = M5.Display;
+    uint16_t black = disp.color565(0, 0, 0);
+    uint16_t white = disp.color565(255, 255, 255);
+    uint16_t green = disp.color565(0, 200, 0);
+
+    disp.fillScreen(black);
+    disp.setTextColor(white, black);
+    disp.setTextSize(1);
+    disp.setCursor(2, 4);  disp.print("UPDATING...");
+    disp.setCursor(2, 16); disp.print(_latestVersion);
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, _downloadUrl);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.setTimeout(120000);
+
+    int code = http.GET();
+    if (code != 200) {
+        http.end();
+        _status = "Download failed (HTTP " + String(code) + ")";
+        return false;
+    }
+
+    int total = http.getSize();
+    if (total <= 0) { http.end(); _status = "Unknown content length"; return false; }
+
+    if (!Update.begin(total)) {
+        http.end();
+        _status = "Not enough flash space";
+        return false;
+    }
+
+    WiFiClient* stream = http.getStreamPtr();
+    uint8_t  buf[512];
+    int      written = 0;
+    int      lastPct = -1;
+
+    while (http.connected() && written < total) {
+        int avail = stream->available();
+        if (avail > 0) {
+            int n = stream->readBytes(buf, min(avail, (int)sizeof(buf)));
+            Update.write(buf, n);
+            written += n;
+            int pct = written * 100 / total;
+            if (pct != lastPct) {
+                lastPct = pct;
+                disp.setCursor(2, 34);
+                disp.printf("%d%%  ", pct);
+                disp.fillRect(2, 48, pct * 124 / 100, 8, green);
+            }
+        }
+        delay(1);
+    }
+    http.end();
+
+    if (written != total) { Update.abort(); _status = "Write incomplete"; return false; }
+    if (!Update.end(true)) {
+        _status = "Finalize failed (err " + String(Update.getError()) + ")";
+        return false;
+    }
+
+    _status = "Update complete";
+    return true;
+}

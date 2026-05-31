@@ -26,6 +26,8 @@ void WebUI::begin(ScreenMode& mode, bool isSetupMode) {
     _server.on("/notify-test", HTTP_POST, [this]() { handleNotifyTest(); });
     _server.on("/ntfy-stats",  HTTP_GET,  [this]() { handleNtfyStats();  });
     _server.on("/api-test",    HTTP_GET,  [this]() { handleApiTest();    });
+    _server.on("/ota-check",   HTTP_GET,  [this]() { handleOtaCheck();   });
+    _server.on("/ota-update",  HTTP_POST, [this]() { handleOtaUpdate();  });
     _server.begin();
 }
 
@@ -114,6 +116,8 @@ void WebUI::handleRoot() {
           "body.dark a{color:#64b5f6}"
           "body.dark #ntfyUsage{color:#aaa}"
           "body.dark .usage-box{border-color:#444}"
+          "body.dark #otaCurrent,body.dark #otaLatest{background:#2a2a2a;border-color:#555;color:#e0e0e0}"
+          "body.dark #otaStatus{color:#aaa}"
           "#apiOut{background:#111;color:#00ff00;font-family:monospace;font-size:11px;"
           "padding:10px;border-radius:4px;height:320px;overflow-y:auto;"
           "white-space:pre-wrap;word-break:break-all;margin-top:10px;"
@@ -277,6 +281,7 @@ void WebUI::handleRoot() {
             "document.querySelector('[data-tab='+id+']').classList.add('on');"
             "localStorage.setItem('pt-tab',id);"
             "if(id==='notify')loadNtfyStats(null);"
+            "if(id==='update')checkOta();"
           "}"
           "function toggleCats(){"
             "document.getElementById('catDrop').classList.toggle('open');"
@@ -308,6 +313,32 @@ void WebUI::handleRoot() {
               "document.getElementById('dmBtn').innerHTML='<i class=\"fa-solid fa-sun\"></i>';"
             "}"
           "});"
+          "function checkOta(){"
+            "var btn=document.getElementById('otaCheckBtn');"
+            "btn.disabled=true;btn.textContent='Checking...';"
+            "fetch('/ota-check')"
+            ".then(function(r){return r.json();})"
+            ".then(function(d){"
+              "document.getElementById('otaCurrent').textContent=d.current;"
+              "document.getElementById('otaLatest').textContent=d.latest||'-';"
+              "document.getElementById('otaStatus').textContent=d.status;"
+              "var ub=document.getElementById('otaUpdateBtn');"
+              "ub.style.display=d.hasUpdate?'block':'none';"
+              "btn.disabled=false;btn.textContent='Check for Updates';"
+            "}).catch(function(){"
+              "document.getElementById('otaStatus').textContent='Request failed';"
+              "btn.disabled=false;btn.textContent='Check for Updates';"
+            "});"
+          "}"
+          "function doOtaUpdate(){"
+            "if(!confirm('Download and install '+document.getElementById('otaLatest').textContent+'? The device will reboot.'))return;"
+            "document.getElementById('otaUpdateBtn').disabled=true;"
+            "document.getElementById('otaStatus').textContent='Starting update...';"
+            "fetch('/ota-update',{method:'POST'})"
+            ".then(function(r){return r.text();})"
+            ".then(function(t){document.open();document.write(t);document.close();})"
+            ".catch(function(){document.getElementById('otaStatus').textContent='Update request failed';});"
+          "}"
           "function toggleFullscreen(){"
             "var el=document.getElementById('liveWrap');"
             "if(!document.fullscreenElement){el.requestFullscreen().catch(function(){});}"
@@ -339,6 +370,8 @@ void WebUI::handleRoot() {
             "<i class='fa-solid fa-bell'></i><br>Notifications</button>"
             "<button type='button' class='tab-btn' data-tab='apitest' onclick='showTab(\"apitest\")'>"
             "<i class='fa-solid fa-terminal'></i><br>API Test</button>"
+            "<button type='button' class='tab-btn' data-tab='update' onclick='showTab(\"update\")'>"
+            "<i class='fa-solid fa-cloud-arrow-down'></i><br>Update</button>"
             "</div>";
 
     // ── WiFi tab ──────────────────────────────────────────────────────────────
@@ -429,6 +462,31 @@ void WebUI::handleRoot() {
             "border:none;border-radius:4px;cursor:pointer;font-size:.9em;width:100%'>"
             "<i class='fa-solid fa-play' style='margin-right:6px'></i>Run Test</button>";
     html += "<pre id='apiOut'>Press Run Test to execute a query.</pre>";
+    html += "</div>";
+
+    // ── Update tab ────────────────────────────────────────────────────────────
+    html += "<div class='tab-panel' id='tab-update'>";
+    html += "<p style='margin:0 0 10px;font-size:.85em;color:#666'>"
+            "<i class='fa-solid fa-circle-info' style='margin-right:4px'></i>"
+            "Updates are checked automatically every 24 hours. "
+            "A notification is sent via ntfy if an update is found.</p>";
+    html += "<label>Current version</label>"
+            "<div id='otaCurrent' style='font-family:monospace;padding:7px;"
+            "background:#f5f5f5;border:1px solid #ccc;border-radius:3px;margin-top:3px'>"
+            + String(OtaUpdater::currentVersion()) + "</div>";
+    html += "<label style='margin-top:10px'>Latest version</label>"
+            "<div id='otaLatest' style='font-family:monospace;padding:7px;"
+            "background:#f5f5f5;border:1px solid #ccc;border-radius:3px;margin-top:3px'>-</div>";
+    html += "<div id='otaStatus' style='margin-top:8px;font-size:.85em;color:#666'>"
+            + _ota.statusMessage() + "</div>";
+    html += "<button type='button' id='otaCheckBtn' onclick='checkOta()' "
+            "style='margin-top:10px;padding:8px 14px;background:#37474F;color:#fff;"
+            "border:none;border-radius:4px;cursor:pointer;font-size:.9em;width:100%'>"
+            "<i class='fa-solid fa-rotate' style='margin-right:6px'></i>Check for Updates</button>";
+    html += "<button type='button' id='otaUpdateBtn' onclick='doOtaUpdate()' "
+            "style='display:none;margin-top:8px;padding:8px 14px;background:#1976D2;color:#fff;"
+            "border:none;border-radius:4px;cursor:pointer;font-size:.9em;width:100%'>"
+            "<i class='fa-solid fa-cloud-arrow-down' style='margin-right:6px'></i>Update Now</button>";
     html += "</div>";
 
     html += "</div></div>"; // end tabs + card
@@ -878,4 +936,24 @@ void WebUI::handleScreen() {
         "</body></html>";
 
     _server.send(200, "text/html", html);
+}
+
+void WebUI::handleOtaCheck() {
+    bool hasUpdate = _ota.check();
+    String json = "{\"current\":\"" + String(OtaUpdater::currentVersion()) + "\","
+                  "\"latest\":\"" + _ota.latestVersion() + "\","
+                  "\"hasUpdate\":" + (hasUpdate ? "true" : "false") + ","
+                  "\"status\":\"" + _ota.statusMessage() + "\"}";
+    _server.send(200, "application/json", json);
+}
+
+void WebUI::handleOtaUpdate() {
+    _server.send(200, "text/html",
+                 buildRebootPage("Updating Firmware",
+                                 "Downloading " + _ota.latestVersion() + "&hellip;"));
+    delay(200);
+    if (_ota.apply()) {
+        delay(1000);
+        ESP.restart();
+    }
 }

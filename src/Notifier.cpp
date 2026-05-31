@@ -46,6 +46,23 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     http.end();
 }
 
+void Notifier::notifyUpdate(const String& newVersion, const Config& config) {
+    if (strlen(config.notifyToken) == 0 || strlen(config.notifyTopic) == 0) return;
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, String("https://ntfy.sh/") + config.notifyTopic);
+    http.addHeader("Authorization", String("Bearer ") + config.notifyToken);
+    http.addHeader("Content-Type",  "text/plain");
+    http.addHeader("Title",    "Firmware Update Available");
+    http.addHeader("Priority", "default");
+    http.addHeader("Tags",     "arrow_up");
+    http.addHeader("Icon",     "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4e1.png");
+    http.POST(newVersion + " is available for PlaneTracker. Open the web UI to update.");
+    http.end();
+}
+
 int Notifier::sendTestHttp(const Config& config) {
     if (strlen(config.notifyToken) == 0 || strlen(config.notifyTopic) == 0) return 0;
 

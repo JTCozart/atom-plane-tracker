@@ -7,6 +7,7 @@
 #include "Display.h"
 #include "Notifier.h"
 #include "AircraftStore.h"
+#include "OtaUpdater.h"
 #include "WebUI.h"
 #include "secrets.h"
 
@@ -16,7 +17,8 @@ static Config        config;
 static Display       display;
 static Notifier      notifier;
 static AircraftStore store;
-static WebUI         webUI(config, store, display);
+static OtaUpdater    ota;
+static WebUI         webUI(config, store, display, ota);
 static ScreenMode    mode             = ScreenMode::Scanning;
 static ScreenMode    preDebug         = ScreenMode::Scanning;
 static int           debugScrollOffset = 0;
@@ -249,5 +251,12 @@ void loop() {
         lastPoll = millis();
         store.fetch(config, notifier, mode);
         render();
+    }
+
+    // Daily OTA update check - notifies via ntfy if an update is found
+    if (!webUI.isInSetupMode() && ota.isDue()) {
+        if (ota.check()) {
+            notifier.notifyUpdate(ota.latestVersion(), config);
+        }
     }
 }

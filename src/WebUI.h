@@ -1,15 +1,16 @@
-﻿#pragma once
+#pragma once
 #include <Arduino.h>
 #include <WebServer.h>
 #include "Config.h"
 #include "AircraftStore.h"
 #include "Display.h"
 #include "AppState.h"
+#include "OtaUpdater.h"
 
 class WebUI {
 public:
-    WebUI(Config& cfg, AircraftStore& store, Display& display)
-        : _cfg(cfg), _store(store), _display(display) {}
+    WebUI(Config& cfg, AircraftStore& store, Display& display, OtaUpdater& ota)
+        : _cfg(cfg), _store(store), _display(display), _ota(ota) {}
 
     // Set up HTTP handlers and optionally start SoftAP.
     // mode is stored by pointer so handlers can read the current screen state.
@@ -35,6 +36,7 @@ private:
     Config&        _cfg;
     AircraftStore& _store;
     Display&       _display;
+    OtaUpdater&    _ota;
 
     void handleRoot();
     void handleSave();
@@ -44,8 +46,10 @@ private:
     void handleNotifyTest();
     void handleNtfyStats();
     void handleApiTest();
+    void handleOtaCheck();
+    void handleOtaUpdate();
 
-    String buildScreenDiv();        // shared by handleScreen() and handleRoot() fragment
+    String buildScreenDiv();
     static String buildRebootPage(const String& heading, const String& subtext);
     static String rgb565ToCss(uint16_t c);
 };
