@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <Arduino.h>
 #include <WebServer.h>
 #include "Config.h"
@@ -15,7 +15,7 @@ public:
     // mode is stored by pointer so handlers can read the current screen state.
     void begin(ScreenMode& mode, bool isSetupMode);
 
-    // Call from loop() — dispatches pending HTTP requests.
+    // Call from loop() - dispatches pending HTTP requests.
     void processRequests();
 
     bool isInSetupMode() const           { return _inSetupMode; }

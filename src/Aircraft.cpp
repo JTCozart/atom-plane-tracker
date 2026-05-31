@@ -1,4 +1,4 @@
-#include "Aircraft.h"
+﻿#include "Aircraft.h"
 #include <cmath>
 
 const char* aircraftClassName(AircraftClass cls) {
@@ -21,7 +21,7 @@ const char* aircraftClassTag(AircraftClass cls) {
 
 // ── Classification helpers ────────────────────────────────────────────────────
 
-// FAA LIFEGUARD prefix is a regulated designation — safe to match on callsign.
+// FAA LIFEGUARD prefix is a regulated designation - safe to match on callsign.
 // All other classification comes from the API's own fields.
 static const char* MEDVAC_CS[] = {
     "LIFEGRD", "MEDVAC", "AIRLIFE", "REACH", "LIFEFLT", nullptr
@@ -45,7 +45,7 @@ static bool containsAny(const String& s, const char** list) {
 
 AircraftClass Aircraft::classify(const String& callsign, const String& owner,
                                   bool milFlag, const String& category) {
-    // Military: API flags only — no callsign guessing to avoid false positives
+    // Military: API flags only - no callsign guessing to avoid false positives
     if (milFlag) return AircraftClass::Military;
 
     String upperCallsign = callsign; upperCallsign.toUpperCase();

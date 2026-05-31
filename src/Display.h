@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <M5Unified.h>
 #include <Arduino.h>
 #include <vector>
@@ -9,7 +9,7 @@ public:
     static constexpr int kVisibleLineCount = 12;
     static constexpr int kContentStartY    = 30;
 
-    // Initialise color tables — must be called after M5.begin()
+    // Initialise color tables - must be called after M5.begin()
     void begin();
 
     void showSplash(int frame);
@@ -43,7 +43,7 @@ private:
     uint16_t  _backgroundColors[4]{};
     uint16_t  _foregroundColors[4]{};
     uint8_t   _scanAnimFrame{0};
-    M5Canvas* _scanCanvas{nullptr};  // off-screen sprite — eliminates flicker
+    M5Canvas* _scanCanvas{nullptr};  // off-screen sprite - eliminates flicker
 
     void initColors();
 };

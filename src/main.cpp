@@ -1,4 +1,4 @@
-#include <M5Unified.h>
+﻿#include <M5Unified.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include "AppState.h"
@@ -76,7 +76,7 @@ static void validatePollInterval() {
         delay(50);
     }
 
-    // Timeout — correct in memory and continue without rebooting
+    // Timeout - correct in memory and continue without rebooting
     config.pollIntervalMs = Config::kMinPollIntervalMs;
 }
 
@@ -150,14 +150,14 @@ void loop() {
     M5.update();
     webUI.processRequests();
 
-    // Web UI control button changed the screen mode — update the physical display immediately
+    // Web UI control button changed the screen mode - update the physical display immediately
     if (webUI.consumeControlChange()) {
         debugScrollOffset = 0;
         lastInteractionTime = millis();
         render();
     }
 
-    // Idle timeout — return to Scanning after 30s of no interaction on History/Summary
+    // Idle timeout - return to Scanning after 30s of no interaction on History/Summary
     if ((mode == ScreenMode::History || mode == ScreenMode::Summary) &&
         millis() - lastInteractionTime >= kIdleTimeoutMs) {
         mode = ScreenMode::Scanning;

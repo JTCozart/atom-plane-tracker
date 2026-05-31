@@ -1,4 +1,4 @@
-# atom-plane-tracker
+﻿# atom-plane-tracker
 
 ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public ADS-B API and displays live aircraft flying within a configurable radius of a fixed coordinate. No API key required.
 
@@ -36,7 +36,7 @@ Screen details:
 | Screen | Description |
 |---|---|
 | **SCANNING** | Animated radar sweep showing scanning is active. When aircraft are overhead this shows the live detection screen instead. |
-| **HISTORY** | Last 5 detected aircraft. Each press advances to the next older entry — `[ HIST 1/5 ]` counter shown in the red bar at the bottom. After the last entry one more press moves to SUMMARY. |
+| **HISTORY** | Last 5 detected aircraft. Each press advances to the next older entry - `[ HIST 1/5 ]` counter shown in the red bar at the bottom. After the last entry one more press moves to SUMMARY. |
 | **SUMMARY** | Session totals by class (Military, Medevac, Commercial, Private). |
 
 - A new aircraft detected while on HISTORY or SUMMARY interrupts to the live view and returns to SCANNING when it leaves.
@@ -65,12 +65,12 @@ D4E5F6 N12345 C172
 
 ### Debug screen details
 
-- **Line 1** — last HTTP status code and total aircraft count returned by the API.
-- **Line 2** — device IP address on the local network (see [Configuration web UI](#configuration-web-ui)).
-- **Line 3** — uptime since last boot (`HH:MM:SS`).
-- **Per aircraft** — ICAO hex, callsign or registration, ICAO type code, ADS-B category, military flag (`Y`/`N`), and barometric altitude.
-- **Short press** — scrolls down 12 lines at a time, wraps to top.
-- **Double short press** (two taps within 400 ms) — sends a test ntfy notification and displays the HTTP response code for 1.5 seconds. Shows `ntfy not configured` if `NTFY_TOPIC` is empty.
+- **Line 1** - last HTTP status code and total aircraft count returned by the API.
+- **Line 2** - device IP address on the local network (see [Configuration web UI](#configuration-web-ui)).
+- **Line 3** - uptime since last boot (`HH:MM:SS`).
+- **Per aircraft** - ICAO hex, callsign or registration, ICAO type code, ADS-B category, military flag (`Y`/`N`), and barometric altitude.
+- **Short press** - scrolls down 12 lines at a time, wraps to top.
+- **Double short press** (two taps within 400 ms) - sends a test ntfy notification and displays the HTTP response code for 1.5 seconds. Shows `ntfy not configured` if `NTFY_TOPIC` is empty.
 - Scroll position is preserved while in debug. Aircraft arrivals and departures do not exit debug mode.
 
 ---
@@ -118,7 +118,7 @@ Both modes serve the same settings page, organised into four tabs:
 |---|---|
 | ntfy Token | Leave blank to keep the current token |
 | ntfy Topic | Leave blank to disable notifications |
-| ntfy Categories | Checkbox dropdown — select which aircraft classes trigger notifications. Leave all unchecked to notify for all classes. |
+| ntfy Categories | Checkbox dropdown - select which aircraft classes trigger notifications. Leave all unchecked to notify for all classes. |
 
 An **Account Usage** box at the bottom of the Notifications tab shows messages sent, the account limit, and remaining quota for the current billing period (fetched live from `ntfy.sh/v1/account`). It loads automatically when the tab is opened and has a Refresh button.
 
@@ -134,12 +134,12 @@ After saving or clearing, the browser waits for the device to come back online a
 
 ### Live screen preview
 
-The settings page includes a live rendering of the device screen in a panel alongside the settings form. It refreshes every 5 seconds and shows the current mode — SCANNING, live aircraft, HISTORY, SUMMARY, or DEBUG — with colors matching the physical display. The SCANNING state renders the same animated radar sweep as the device display. Control buttons below the preview switch the device between modes in real time.
+The settings page includes a live rendering of the device screen in a panel alongside the settings form. It refreshes every 5 seconds and shows the current mode - SCANNING, live aircraft, HISTORY, SUMMARY, or DEBUG - with colors matching the physical display. The SCANNING state renders the same animated radar sweep as the device display. Control buttons below the preview switch the device between modes in real time.
 
 ### Other features
 
-- **Dark mode** — toggle in the top-right corner; defaults to your system preference and persists per browser.
-- **Send Test Notification** — button in the Notifications tab sends a test ntfy push and reports the HTTP result inline without saving or rebooting.
+- **Dark mode** - toggle in the top-right corner; defaults to your system preference and persists per browser.
+- **Send Test Notification** - button in the Notifications tab sends a test ntfy push and reports the HTTP result inline without saving or rebooting.
 
 ---
 
@@ -161,11 +161,11 @@ Configure in `secrets.h` (compile-time defaults) or via the **configuration web 
 ```cpp
 #define NTFY_TOKEN   "your-access-token"
 #define NTFY_TOPIC   "your-topic-name"
-// Comma-separated filter: MIL, MEDVAC, COMM, PRIV — empty = all classes
+// Comma-separated filter: MIL, MEDVAC, COMM, PRIV - empty = all classes
 #define NTFY_CLASSES "MIL,MEDVAC"
 ```
 
-Leave `NTFY_TOPIC` empty to disable notifications entirely. Test notifications can be sent via the **Send Test Notification** button in the web UI, or by **double-pressing** the button on the debug screen — both report the HTTP response code.
+Leave `NTFY_TOPIC` empty to disable notifications entirely. Test notifications can be sent via the **Send Test Notification** button in the web UI, or by **double-pressing** the button on the debug screen - both report the HTTP response code.
 
 ---
 
@@ -214,7 +214,7 @@ Edit `include/secrets.h` with your defaults. These values are used on first boot
 
 #define POLL_INTERVAL_MS  15000     // milliseconds between API polls
 
-// Optional ntfy notifications — leave NTFY_TOPIC empty to disable
+// Optional ntfy notifications - leave NTFY_TOPIC empty to disable
 #define NTFY_TOKEN   "your-ntfy-access-token"
 #define NTFY_TOPIC   "your-topic-name"
 #define NTFY_CLASSES ""             // empty = all classes
@@ -251,7 +251,7 @@ Click the **plug icon (Serial Monitor)** in the PlatformIO toolbar to open a ter
 
 ## API
 
-Data comes from **[adsb.lol](https://adsb.lol)** — a community-run, free ADS-B feed with no account or API key required. The endpoint used is:
+Data comes from **[adsb.lol](https://adsb.lol)** - a community-run, free ADS-B feed with no account or API key required. The endpoint used is:
 
 ```
 GET https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{radius_nm}
@@ -261,7 +261,7 @@ GET https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{radius_nm}
 
 ## Getting started
 
-New to the project? Start with **[QUICKSTART.md](QUICKSTART.md)** — a step-by-step guide for first-time setup without needing to understand the code.
+New to the project? Start with **[QUICKSTART.md](QUICKSTART.md)** - a step-by-step guide for first-time setup without needing to understand the code.
 
 ---
 
@@ -269,7 +269,7 @@ New to the project? Start with **[QUICKSTART.md](QUICKSTART.md)** — a step-by-
 
 ```
 atom-plane-tracker/
-├── platformio.ini              # Build config — m5stack-atoms3, M5Unified, ArduinoJson
+├── platformio.ini              # Build config - m5stack-atoms3, M5Unified, ArduinoJson
 ├── README.md                   # This file
 ├── QUICKSTART.md               # Quick-start guide for new users
 ├── src/
@@ -282,7 +282,7 @@ atom-plane-tracker/
 │   ├── Notifier.h/cpp          # ntfy.sh push notifications
 │   └── WebUI.h/cpp             # HTTP server, configuration web UI
 ├── include/
-│   ├── secrets.h               # Your credentials — gitignored, never committed
+│   ├── secrets.h               # Your credentials - gitignored, never committed
 │   └── secrets.h.example       # Safe template to copy from
 └── .gitignore
 ```

@@ -1,4 +1,4 @@
-#include "Display.h"
+﻿#include "Display.h"
 #include <M5Unified.h>
 #include <cmath>
 
@@ -22,7 +22,7 @@ void Display::initColors() {
 
 void Display::begin() {
     initColors();
-    // Off-screen canvas for the scanning animation — pushSprite() sends the
+    // Off-screen canvas for the scanning animation - pushSprite() sends the
     // complete frame in one DMA transfer, eliminating per-draw-call flicker.
     _scanCanvas = new M5Canvas(&M5.Display);
     _scanCanvas->setColorDepth(16);
@@ -79,7 +79,7 @@ void Display::showSplash(int frame) {
 // ── Scan / AP screens ─────────────────────────────────────────────────────────
 
 void Display::showScanning() {
-    // ── Radar sweep — drawn into off-screen canvas, pushed in one transfer ────
+    // ── Radar sweep - drawn into off-screen canvas, pushed in one transfer ────
     const int   cx = 64, cy = 50;
     const int   outerR = 35, innerR = 18;
     const int   kFramesPerRev = 36;
@@ -113,7 +113,7 @@ void Display::showScanning() {
     _scanCanvas->setCursor(labelX, 100);
     _scanCanvas->print("SCANNING");
 
-    // Single atomic transfer to the physical display — no partial-frame flicker
+    // Single atomic transfer to the physical display - no partial-frame flicker
     _scanCanvas->pushSprite(0, 0);
 
     _scanAnimFrame++;
@@ -141,20 +141,20 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
     M5.Display.fillScreen(_backgroundColors[toIndex(cls)]);
     M5.Display.setTextColor(_foregroundColors[toIndex(cls)], _backgroundColors[toIndex(cls)]);
 
-    // Row 1-2 — callsign, extra large
+    // Row 1-2 - callsign, extra large
     M5.Display.setTextSize(3);
     M5.Display.setCursor(2, 8);
     String cs = aircraft.callsign.length() ? aircraft.callsign : "N/A";
     if (cs.length() > 8) cs = cs.substring(0, 8);
     M5.Display.print(cs);
 
-    // Row 3 — type
+    // Row 3 - type
     M5.Display.setTextSize(1.5);
     M5.Display.setCursor(2, 34);
     M5.Display.print("Type: ");
     M5.Display.print(aircraft.type.length() ? aircraft.type : "???");
 
-    // Row 4 — altitude
+    // Row 4 - altitude
     M5.Display.setTextSize(1.5);
     M5.Display.setCursor(2, 47);
     if (aircraft.altitude > 0) {
@@ -163,7 +163,7 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
         M5.Display.print("Alt: GND");
     }
 
-    // Row 5 — ETA until leaving radius (live only, not history)
+    // Row 5 - ETA until leaving radius (live only, not history)
     if (!isHistorical) {
         M5.Display.setTextSize(1.5);
         M5.Display.setCursor(2, 60);
@@ -177,7 +177,7 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
 
     // Bottom banner
     if (isHistorical) {
-        // Classification tag — aircraft type above history counter
+        // Classification tag - aircraft type above history counter
         uint16_t tagColor = M5.Display.color565(64, 64, 64);
         M5.Display.fillRect(0, 93, 128, 17, tagColor);
         M5.Display.setTextColor(_colorWhite, tagColor);
@@ -188,7 +188,7 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
         M5.Display.setCursor(x, 93);
         M5.Display.print(typeStr);
 
-        // History counter — red strip with entry counter, extends to edge
+        // History counter - red strip with entry counter, extends to edge
         M5.Display.fillRect(0, 110, 128, 20, _colorRed);
         M5.Display.setTextColor(_colorWhite, _colorRed);
         M5.Display.setTextSize(1);
@@ -198,7 +198,7 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
         M5.Display.setCursor(histX, 115);
         M5.Display.print(bar);
     } else {
-        // Classification banner — dark gray strip showing aircraft type, extends to edge
+        // Classification banner - dark gray strip showing aircraft type, extends to edge
         uint16_t bannerColor = M5.Display.color565(64, 64, 64);
         M5.Display.fillRect(0, 106, 128, 25, bannerColor);
         M5.Display.setTextColor(_colorWhite, bannerColor);
@@ -237,15 +237,15 @@ void Display::showDebug(const std::vector<String>& lines, int scrollOffset,
     M5.Display.setTextColor(_colorWhite, _colorBlack);
     M5.Display.setTextSize(1);
 
-    // Header row 1 — HTTP status and aircraft count
+    // Header row 1 - HTTP status and aircraft count
     M5.Display.setCursor(0, 0);
     M5.Display.printf("DBG HTTP:%d ac:%d", responseCode, aircraftCount);
 
-    // Header row 2 — device IP (tap-able via browser for config)
+    // Header row 2 - device IP (tap-able via browser for config)
     M5.Display.setCursor(0, 10);
     M5.Display.printf("IP: %s", ipAddress.c_str());
 
-    // Header row 3 — uptime since boot
+    // Header row 3 - uptime since boot
     M5.Display.setCursor(0, 20);
     uint32_t h = uptimeSeconds / 3600;
     uint32_t m = (uptimeSeconds % 3600) / 60;

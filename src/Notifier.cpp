@@ -1,4 +1,4 @@
-#include "Notifier.h"
+﻿#include "Notifier.h"
 #include "Display.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -28,7 +28,7 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
              aircraft.type.length() ? aircraft.type.c_str() : "???",
              aircraft.altitude);
 
-    // ADS-B Exchange globe link by ICAO hex — pure web app, no app redirect conflicts
+    // ADS-B Exchange globe link by ICAO hex - pure web app, no app redirect conflicts
     String trackUrl = "https://globe.adsbexchange.com/?icao=" + aircraft.icao;
 
     WiFiClientSecure client;

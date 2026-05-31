@@ -1,4 +1,4 @@
-#include "WebUI.h"
+﻿#include "WebUI.h"
 #include "Notifier.h"
 #include <WiFi.h>
 #include <Preferences.h>
@@ -427,7 +427,7 @@ void WebUI::handleRoot() {
             "</form>"
             "</div>"; // end form-col
 
-    // Right column — live screen preview + controls
+    // Right column - live screen preview + controls
     html += "<div class='preview-col'>"
             "<div class='card'>"
             "<div class='card-hdr' style='justify-content:space-between'>"
@@ -508,7 +508,7 @@ void WebUI::handleControl() {
         String s = _server.arg("screen");
         if (s == "history") {
             if (*_screenMode == ScreenMode::History && _store.historyCount() > 0) {
-                // Already on history — page to the next entry, wrapping at the end
+                // Already on history - page to the next entry, wrapping at the end
                 int next = _store.historyIndex() + 1;
                 _store.setHistoryIndex(next < _store.historyCount() ? next : 0);
             } else {
@@ -734,7 +734,7 @@ String WebUI::buildScreenDiv() {
         const Aircraft* ac = _store.currentAircraft();
         if (ac) buildAcInner(*ac, false, 0, 0);
     } else if (mode == ScreenMode::Scanning) {
-        // Canvas element only — animation is started by startRadar() in the main page JS
+        // Canvas element only - animation is started by startRadar() in the main page JS
         inner = "<canvas id='rc' width='256' height='256' "
                 "style='position:absolute;top:0;left:0'></canvas>";
     } else if (mode == ScreenMode::History) {

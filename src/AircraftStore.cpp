@@ -1,4 +1,4 @@
-#include "AircraftStore.h"
+﻿#include "AircraftStore.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -6,7 +6,7 @@
 #include <map>
 #include <set>
 
-// adsb.lol — free, no API key, ADSBExchange v2 format, radius in NM
+// adsb.lol - free, no API key, ADSBExchange v2 format, radius in NM
 static const char* API_FMT = "https://api.adsb.lol/v2/lat/%.6f/lon/%.6f/dist/%.1f";
 
 // ── History ───────────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
     if (_apiResponseLines.empty()) _apiResponseLines.push_back("No aircraft");
 
     // Don't reset scroll if user is actively viewing debug
-    // (scroll is owned by the caller / main.cpp — nothing to reset here)
+    // (scroll is owned by the caller / main.cpp - nothing to reset here)
 
     std::set<String> seen;
 
