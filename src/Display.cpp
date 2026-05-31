@@ -253,7 +253,7 @@ void Display::showDebug(const std::vector<String>& lines, int scrollOffset,
     uint32_t h = uptimeSeconds / 3600;
     uint32_t m = (uptimeSeconds % 3600) / 60;
     uint32_t s = uptimeSeconds % 60;
-    M5.Display.printf("UP: %02lu:%02lu:%02lu", h, m, s);
+    M5.Display.printf("UP: %02u:%02u:%02u", h, m, s);
 
     // Content lines
     int lineTotal = (int)lines.size();
