@@ -1,0 +1,41 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Use example secrets as build defaults
+        run: cp include/secrets.h.example include/secrets.h
+
+      - name: Build firmware
+        run: pio run
+
+      - name: Stage firmware binary
+        run: cp .pio/build/m5stack-atoms3/firmware.bin atom-plane-tracker-${{ github.ref_name }}.bin
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: atom-plane-tracker-${{ github.ref_name }}.bin
+          generate_release_notes: true
