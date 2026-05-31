@@ -116,7 +116,9 @@ void WebUI::handleRoot() {
           "body.dark a{color:#64b5f6}"
           "body.dark #ntfyUsage{color:#aaa}"
           "body.dark .usage-box{border-color:#444}"
-          "body.dark #otaCurrent,body.dark #otaLatest{background:#2a2a2a;border-color:#555;color:#e0e0e0}"
+          ".ver-box{padding:7px;font-family:monospace;border:1px solid #ccc;border-radius:3px;"
+          "margin-top:3px;background:#f5f5f5;color:#222}"
+          "body.dark .ver-box{background:#2a2a2a;border-color:#555;color:#e0e0e0}"
           "body.dark #otaStatus{color:#aaa}"
           "#apiOut{background:#111;color:#00ff00;font-family:monospace;font-size:11px;"
           "padding:10px;border-radius:4px;height:320px;overflow-y:auto;"
@@ -471,12 +473,9 @@ void WebUI::handleRoot() {
             "Updates are checked automatically every 24 hours. "
             "A notification is sent via ntfy if an update is found.</p>";
     html += "<label>Current version</label>"
-            "<div id='otaCurrent' style='font-family:monospace;padding:7px;"
-            "background:#f5f5f5;border:1px solid #ccc;border-radius:3px;margin-top:3px'>"
-            + String(OtaUpdater::currentVersion()) + "</div>";
+            "<div id='otaCurrent' class='ver-box'>" + String(OtaUpdater::currentVersion()) + "</div>";
     html += "<label style='margin-top:10px'>Latest version</label>"
-            "<div id='otaLatest' style='font-family:monospace;padding:7px;"
-            "background:#f5f5f5;border:1px solid #ccc;border-radius:3px;margin-top:3px'>-</div>";
+            "<div id='otaLatest' class='ver-box'>-</div>";
     html += "<div id='otaStatus' style='margin-top:8px;font-size:.85em;color:#666'>"
             + _ota.statusMessage() + "</div>";
     html += "<button type='button' id='otaCheckBtn' onclick='checkOta()' "
