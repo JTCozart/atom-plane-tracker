@@ -60,11 +60,13 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
 
     int httpCode = http.GET();
     _lastResponseCode = httpCode;
-    if (httpCode != 200) { http.end(); return; }
+    if (httpCode != 200) { http.end(); _consecutiveFailures++; return; }
 
     JsonDocument doc;
-    if (deserializeJson(doc, http.getStream())) { http.end(); return; }
+    if (deserializeJson(doc, http.getStream())) { http.end(); _consecutiveFailures++; return; }
     http.end();
+
+    _consecutiveFailures = 0;
 
     // Rebuild debug lines from raw response
     JsonArray acArr = doc["ac"].as<JsonArray>();

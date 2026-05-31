@@ -286,6 +286,32 @@ void Display::showMessage(const String& line1, const String& line2) {
     }
 }
 
+void Display::showLostConnection(int retryCount) {
+    M5.Display.fillScreen(_colorRed);
+    M5.Display.setTextColor(_colorBlack, _colorRed);
+
+    M5.Display.setTextSize(3);
+    int x = (128 - 4 * 18) / 2;
+    M5.Display.setCursor(x, 12);
+    M5.Display.print("LOST");
+
+    M5.Display.setTextSize(2);
+    x = (128 - 10 * 12) / 2;
+    M5.Display.setCursor(x, 42);
+    M5.Display.print("CONNECTION");
+
+    M5.Display.setTextSize(1);
+    x = (128 - 8 * 6) / 2;
+    M5.Display.setCursor(x, 78);
+    M5.Display.print("RETRYING");
+
+    char buf[12];
+    snprintf(buf, sizeof(buf), "(%d)", retryCount);
+    x = (128 - (int)strlen(buf) * 6) / 2;
+    M5.Display.setCursor(x, 90);
+    M5.Display.print(buf);
+}
+
 void Display::showPollIntervalError(uint32_t currentMs, uint32_t minimumMs, int secondsRemaining) {
     M5.Display.fillScreen(_colorRed);
     M5.Display.setTextColor(_colorBlack, _colorRed);

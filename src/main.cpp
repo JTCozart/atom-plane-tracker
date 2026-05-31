@@ -91,6 +91,8 @@ static void render() {
                     int eta = ac->etaSeconds(config.latitude, config.longitude, config.radius);
                     display.showAircraft(*ac, false, 0, 0, eta);
                 }
+            } else if (store.consecutiveFailures() > 0) {
+                display.showLostConnection(store.consecutiveFailures());
             } else {
                 display.showScanning();
             }
@@ -233,9 +235,10 @@ void loop() {
         }
     }
 
-    // Animate the scanning screen at ~20 fps when idle
+    // Animate the scanning screen at ~20 fps when idle (skip if connection lost)
     static uint32_t lastScanRefresh = 0;
     if (mode == ScreenMode::Scanning && !store.hasActiveAircraft() &&
+        store.consecutiveFailures() == 0 &&
         millis() - lastScanRefresh >= 50) {
         lastScanRefresh = millis();
         display.showScanning();

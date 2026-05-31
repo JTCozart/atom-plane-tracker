@@ -733,6 +733,15 @@ String WebUI::buildScreenDiv() {
     } else if (mode == ScreenMode::Scanning && _store.hasActiveAircraft()) {
         const Aircraft* ac = _store.currentAircraft();
         if (ac) buildAcInner(*ac, false, 0, 0);
+    } else if (mode == ScreenMode::Scanning && _store.consecutiveFailures() > 0) {
+        bg = "#FF0000"; fg = "#000000";
+        inner = "<div style='position:absolute;inset:0;display:flex;flex-direction:column;"
+                "align-items:center;justify-content:center;font-weight:bold'>"
+                "<div style='font-size:32px'>LOST</div>"
+                "<div style='font-size:20px'>CONNECTION</div>"
+                "<div style='font-size:13px;margin-top:10px'>RETRYING (" +
+                String(_store.consecutiveFailures()) + ")</div>"
+                "</div>";
     } else if (mode == ScreenMode::Scanning) {
         // Canvas element only - animation is started by startRadar() in the main page JS
         inner = "<canvas id='rc' width='256' height='256' "
@@ -770,11 +779,48 @@ String WebUI::buildScreenDiv() {
         }
     }
 
-    return "<div id='scr' style='background:" + bg + ";color:" + fg + ";"
-           "width:256px;height:256px;display:inline-block;position:relative;"
-           "font-family:monospace;font-size:12px;padding:6px;box-sizing:border-box;"
-           "border:4px solid #222;border-radius:6px;overflow:hidden;text-align:left'>"
-           + inner + "</div>";
+    String html = "<div id='scr' style='background:" + bg + ";color:" + fg + ";"
+                  "width:256px;height:256px;display:inline-block;position:relative;"
+                  "font-family:monospace;font-size:12px;padding:6px;box-sizing:border-box;"
+                  "border:4px solid #222;border-radius:6px;overflow:hidden;text-align:left'>"
+                  + inner + "</div>";
+
+    if (!_inSetupMode && _store.hasActiveAircraft()) {
+        html += "<table style='width:256px;border-collapse:collapse;font-family:monospace;"
+                "font-size:11px;margin-top:6px'>"
+                "<thead><tr style='border-bottom:1px solid #888'>"
+                "<th style='text-align:left;padding:2px 4px'>Tail</th>"
+                "<th style='text-align:left;padding:2px 4px'>Type</th>"
+                "<th style='text-align:right;padding:2px 4px'>Alt</th>"
+                "<th style='text-align:right;padding:2px 4px'>ETA</th>"
+                "</tr></thead><tbody>";
+
+        for (const auto& kv : _store.activeAircraft()) {
+            const Aircraft& ac = kv.second;
+            String tail = ac.callsign.length() ? ac.callsign :
+                          ac.registration.length() ? ac.registration : ac.icao;
+            String trackUrl = "https://globe.adsbexchange.com/?icao=" + ac.icao;
+            String altStr   = ac.altitude > 0 ? String((int)ac.altitude) + "ft" : "GND";
+
+            int rawEta = ac.etaSeconds(_cfg.latitude, _cfg.longitude, _cfg.radius);
+            int eta    = ac.adjustedEta(rawEta);
+            char etaBuf[8];
+            if (eta < 0) strcpy(etaBuf, "--:--");
+            else         snprintf(etaBuf, sizeof(etaBuf), "%d:%02d", eta / 60, eta % 60);
+
+            html += "<tr style='border-bottom:1px solid #333'>"
+                    "<td style='padding:2px 4px'>"
+                    "<a href='" + trackUrl + "' target='_blank' style='color:inherit'>" + tail + "</a>"
+                    "</td>"
+                    "<td style='padding:2px 4px'>" + String(ac.type.length() ? ac.type.c_str() : "?") + "</td>"
+                    "<td style='text-align:right;padding:2px 4px'>" + altStr + "</td>"
+                    "<td style='text-align:right;padding:2px 4px'>" + String(etaBuf) + "</td>"
+                    "</tr>";
+        }
+        html += "</tbody></table>";
+    }
+
+    return html;
 }
 
 void WebUI::handleScreen() {

@@ -37,8 +37,11 @@ public:
     int detectionCount(AircraftClass classification) const { return _detectionCounts[toIndex(classification)]; }
 
     const std::vector<String>& apiResponseLines() const { return _apiResponseLines; }
-    int lastResponseCode()  const { return _lastResponseCode; }
-    int lastAircraftCount() const { return _lastAircraftCount; }
+    int lastResponseCode()    const { return _lastResponseCode; }
+    int lastAircraftCount()   const { return _lastAircraftCount; }
+    int consecutiveFailures() const { return _consecutiveFailures; }
+
+    const std::map<String, Aircraft>& activeAircraft() const { return _activeAircraft; }
 
 private:
     std::map<String, Aircraft> _activeAircraft;
@@ -52,8 +55,9 @@ private:
     int _detectionCounts[4] = {0, 0, 0, 0};
 
     std::vector<String> _apiResponseLines;
-    int _lastResponseCode  = 0;
-    int _lastAircraftCount = 0;
+    int _lastResponseCode    = 0;
+    int _lastAircraftCount   = 0;
+    int _consecutiveFailures = 0;
 
     void recordInHistory(const Aircraft& aircraft);
 };

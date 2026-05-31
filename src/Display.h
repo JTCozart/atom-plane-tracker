@@ -30,6 +30,9 @@ public:
     // Generic 2-line message on a black background (connecting, test-ntfy feedback, etc.)
     void showMessage(const String& line1, const String& line2 = "");
 
+    // Red screen shown when the API cannot be reached.
+    void showLostConnection(int retryCount);
+
     // Red error screen shown when poll interval is below the minimum.
     // secondsRemaining: countdown until auto-correction (shown to user).
     void showPollIntervalError(uint32_t currentMs, uint32_t minimumMs, int secondsRemaining);
