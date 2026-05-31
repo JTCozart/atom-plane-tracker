@@ -178,10 +178,10 @@ void Display::showSummary(int militaryCount, int medevacCount, int commercialCou
 
     M5.Display.setTextSize(1.5);
     int y = 38;
-    M5.Display.setCursor(4, y); M5.Display.printf("Military:   %d", militaryCount);   y += 14;
-    M5.Display.setCursor(4, y); M5.Display.printf("Medevac:    %d", medevacCount);    y += 14;
-    M5.Display.setCursor(4, y); M5.Display.printf("Commercial: %d", commercialCount); y += 14;
-    M5.Display.setCursor(4, y); M5.Display.printf("Private:    %d", privateCount);
+    M5.Display.setCursor(4, y); M5.Display.printf("MIL:   %3d", militaryCount);   y += 20;
+    M5.Display.setCursor(4, y); M5.Display.printf("MED:   %3d", medevacCount);    y += 20;
+    M5.Display.setCursor(4, y); M5.Display.printf("COMM:  %3d", commercialCount); y += 20;
+    M5.Display.setCursor(4, y); M5.Display.printf("PRIV:  %3d", privateCount);
 }
 
 // ── Debug screen ──────────────────────────────────────────────────────────────
