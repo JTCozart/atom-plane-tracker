@@ -103,8 +103,23 @@ void WebUI::handleSave() {
     prefs.end();
 
     _server.send(200, "text/html",
-        F("<!DOCTYPE html><html><body style='font-family:sans-serif;text-align:center;margin-top:60px'>"
-          "<h2>Saved! Rebooting&hellip;</h2></body></html>"));
+        F("<!DOCTYPE html><html><head><title>PlaneTracker - Saved</title>"
+          "<style>body{font-family:sans-serif;text-align:center;margin-top:60px}"
+          "p{color:#666}</style>"
+          "<script>"
+          "function poll(){"
+            "fetch('/').then(function(r){"
+              "if(r.ok)window.location.href='/';"
+              "else setTimeout(poll,1000);"
+            "}).catch(function(){setTimeout(poll,1000);});"
+          "}"
+          "setTimeout(poll,4000);"
+          "</script>"
+          "</head><body>"
+          "<h2>Saved!</h2>"
+          "<p>Rebooting&hellip;</p>"
+          "<p>Returning to settings when back online.</p>"
+          "</body></html>"));
     delay(1500);
     ESP.restart();
 }
