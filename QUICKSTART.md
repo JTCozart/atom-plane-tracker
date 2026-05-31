@@ -7,7 +7,7 @@ This guide walks you through setting up your **atom-plane-tracker** if it came p
 ## What you'll need
 
 - **atom-plane-tracker device** (M5Stack Atom S3R)
-- **Smartphone** (iOS or Android)
+- **Smartphone or laptop**
 - **WiFi network** at your location
 - **Internet browser** (Chrome, Safari, Firefox, etc.)
 - **5 minutes**
@@ -24,235 +24,172 @@ SSID: PlaneTracker
 Pass: PlaneTracker
 ```
 
-This means the device is in setup mode and waiting for you to connect it to your WiFi.
+This means the device is broadcasting its own WiFi hotspot and waiting to be configured.
 
 ---
 
-## Step 2: Connect your phone/laptop to the device's WiFi
+## Step 2: Connect to the device's WiFi hotspot
 
 On your phone or laptop:
 
 1. Open your WiFi settings
-2. Look for a network called **`PlaneTracker`**
-3. Select it and enter the password: **`PlaneTracker`**
-4. Your device is now connected to the tracker itself (not the internet yet)
+2. Connect to the network called **`PlaneTracker`**, password **`PlaneTracker`**
+3. You are now connected directly to the tracker (not the internet yet)
 
 ---
 
-## Step 3: Open the setup page in your browser
+## Step 3: Open the setup page
 
-1. Open any web browser (Chrome, Safari, Firefox)
+1. Open any web browser
 2. Go to: **`http://192.168.4.1`**
-3. You should see a form titled **"PlaneTracker Setup"**
+3. You should see the **PlaneTracker Setup** page
 
 If the page doesn't load, try refreshing (Ctrl+R or Cmd+R).
 
 ---
 
-## Step 4: Connect to your WiFi
+## Step 4: Configure all your settings
 
-On the setup form, fill in:
+Fill in all three tabs before saving — this way the device only needs to reboot once.
+
+### WiFi tab
 
 | Field | What to enter |
 |---|---|
-| **WiFi SSID** | The name of your home WiFi network |
-| **WiFi Password** | Your WiFi password |
+| **SSID** | The name of your home WiFi network |
+| **Password** | Your WiFi password |
 
-Click **Save & Reboot**.
+### Detection tab
 
-The device will:
-- Save your WiFi settings
-- Reboot automatically
-- Connect to your home WiFi (this takes ~10 seconds)
-- Show the scanning screen
+| Field | What to enter |
+|---|---|
+| **Latitude / Longitude** | Your location — use the **Pick on map** button to drop a pin instead of typing coordinates manually |
+| **Search Radius (NM)** | How far to scan for aircraft in nautical miles. 10 NM ≈ 11.5 statute miles is a good starting point |
+| **Scan Interval (s)** | How often to poll for aircraft in seconds. Default: 15. **Minimum: 10** |
 
----
+> **Tip:** Before saving, click the **API Test** tab and press **Run Test**. The device will fire a live query using the coordinates and radius you entered and show the raw JSON response. If you see aircraft you're all set; if it's empty try increasing the radius.
 
-## Step 5: Find your location coordinates
+### Notifications tab (optional — skip if you don't want push alerts)
 
-You need to set the **latitude** and **longitude** where you want to track aircraft.
-
-### Easiest method (use the built-in map picker):
-
-On the setup page, open the **Detection** tab and click **Pick on map**. An interactive map opens — click anywhere to drop a pin and automatically fill in the latitude and longitude fields. No need to look up coordinates manually.
-
-### Manual method (Google Maps):
-
-1. Go to **Google Maps** on your phone
-2. Tap your current location (the blue dot)
-3. The popup shows your coordinates at the top: **`lat, lon`**
-4. Example: `36.1234, -83.9876`
-
-### For a specific address:
-
-1. Go to **Google Maps**
-2. Search for an address
-3. Right-click (or long-press on mobile) on the map
-4. Select the coordinates that appear at the top
+See [Step 6](#step-6-optional-set-up-push-notifications) for how to get an ntfy token and topic first — you can always come back to this after the initial setup.
 
 ---
 
-## Step 6: Find the device's IP address
+## Step 5: Save & find your IP address
 
-The device shows its IP address on the debug screen. Here's how:
+Click **Save & Reboot**. The device will save all settings, reboot, and join your home WiFi network — this takes about 10–15 seconds.
 
-1. Look at the device screen (should still be in setup/scanning mode)
-2. **Long-press the button for 0.8 seconds** (hold it down)
-3. The screen changes to show debug info with the IP address on line 2:
+**Switch your phone/laptop back to your home WiFi network.**
+
+Now find the device's new IP address so you can access the settings page in the future:
+
+1. **Long-press the button on the device for 0.8 seconds** to enter debug mode
+2. The screen shows:
 
 ```
 DBG HTTP:200 ac:7
 IP: 192.168.1.XX
-UP: 00:04:32
-[rest of debug info...]
+UP: 00:00:42
+...
 ```
 
-4. Write down the **IP address** (e.g., `192.168.1.50`)
+3. Note the IP address on line 2 (e.g. `192.168.1.50`)
+4. **Long-press again** to exit debug and return to scanning
+5. Open **`http://192.168.1.XX`** in your browser — this is your settings page from now on
 
-5. **Long-press the button again** to exit debug and return to scanning
-
-6. Open your web browser and go to: **`http://192.168.1.XX`** (use the IP you found)
-
----
-
-## Step 7: Set your location and preferences
-
-On the device's setup page, click the **Detection** tab and fill in:
-
-| Field | What to enter |
-|---|---|
-| **Latitude** | Your latitude (from Google Maps or the map picker) |
-| **Longitude** | Your longitude (from Google Maps or the map picker) |
-| **Search Radius (NM)** | How far to search for aircraft (nautical miles). Default: 10 NM ≈ 11.5 statute miles |
-| **Scan Interval (s)** | How often to check for aircraft, in seconds. Default: 15. **Minimum: 10 seconds** |
-
-### Optional: verify your settings before saving
-
-Click the **API Test** tab and press **Run Test**. The device will fire a live query using the coordinates and radius you just entered and display the raw response. If you see aircraft in the JSON you're all set; if it's empty try increasing the radius.
-
-Click **Save & Reboot**.
-
-The device will now start scanning for aircraft overhead!
+> **Bookmark it.** Any time you want to change settings, just open this address in your browser. You can also find the IP from your router's connected devices list if you forget it.
 
 ---
 
-## Step 8 (Optional): Set up push notifications
+## Step 6 (Optional): Set up push notifications
 
-If you want your phone to notify you when aircraft pass overhead:
+If you want your phone to alert you when aircraft pass overhead:
 
 ### About ntfy.sh (free service)
 
-- **Completely free** — no credit card required
-- **250 notifications per day** on the free tier — plenty for casual aircraft tracking
-- If you track aircraft very frequently and need more than 250/day, paid plans are available on ntfy.sh
-- **Private topics** — use a unique topic name that no one else would guess
+- **Free tier** — 250 notifications per day, no credit card required
+- **Private topics** — use a unique name nobody else would guess
 
-### 8a. Create a ntfy.sh account
+### 6a. Download the ntfy app
 
-1. Go to **https://ntfy.sh** on your phone
-2. You **don't need an account** — ntfy is anonymous and free
-3. Create a **unique topic name** for your notifications:
-   - Think of something that no one else would guess
-   - Example: `airplane-tracker-myname-12345`
-   - Write it down — you'll need it twice
+- **iPhone**: Search **"ntfy"** in the App Store
+- **Android**: Search **"ntfy"** in Google Play
 
-### 8b. Download the ntfy app on your phone
+### 6b. Create an account and topic on ntfy.sh
 
-- **iPhone**: Search for **"ntfy"** in the App Store, install the official app
-- **Android**: Search for **"ntfy"** in Google Play, install the official app
+1. Go to **https://ntfy.sh** and create a free account
+2. Create a **unique topic name** (e.g. `planetracker-yourname-12345`) and subscribe to it in the app
+3. In your account settings, generate an **access token** — it looks like `tk_u2f0538r6kubswdvvmnpcf1bcap7v`
 
-### 8c. Create a topic in the ntfy app
+### 6c. Add the token and topic to the device
 
-1. Open the **ntfy app** on your phone
-2. Tap **"+"** or **"Add subscription"**
-3. Enter your **unique topic name** from step 8a (e.g., `airplane-tracker-myname-12345`)
-4. Subscribe — the app will now listen for notifications on that topic
-
-### 8d. Generate an access token
-
-1. Go back to **https://ntfy.sh** in your browser
-2. Scroll down to the **"Publish"** section
-3. Look for instructions on creating an **access token** or click your topic name at the top
-4. Copy the token (it looks like: `tk_u2f0538r6kubswdvvmnpcf1bcap7v`)
-
-### 8e. Add ntfy settings to the device
-
-1. Go back to your device's setup page: **`http://192.168.1.XX`** (the IP you found in Step 6)
+1. Open the settings page: **`http://192.168.1.XX`**
 2. Click the **Notifications** tab
 3. Fill in:
 
 | Field | What to enter |
 |---|---|
-| **ntfy Token** | The access token from step 8d |
-| **ntfy Topic** | Your unique topic name (e.g., `airplane-tracker-myname-12345`) |
-| **ntfy Categories** | (Optional) Which aircraft classes trigger notifications — leave all unchecked for all classes |
+| **ntfy Token** | Your access token from step 6b |
+| **ntfy Topic** | Your unique topic name |
+| **ntfy Categories** | Which aircraft classes trigger alerts — leave all unchecked to notify for everything |
 
 4. Click **Save & Reboot**
 
-Now, whenever an aircraft enters your search radius, you'll get a notification on your phone with a **Track Flight** button that opens the live flight on ADS-B Exchange.
+Whenever an aircraft enters your radius you'll receive a push notification with a **Track Flight** button that opens the live flight on ADS-B Exchange.
 
-> **Tip:** After saving, return to the Notifications tab and check the **Account Usage** box to confirm your remaining daily message quota.
+> **Tip:** After saving, open the Notifications tab and check the **Account Usage** box to confirm your remaining daily quota.
 
 ---
 
-## Step 9: You're done!
+## Step 7: You're done!
 
-The device is now:
-- Connected to your WiFi
-- Scanning for aircraft over your location
-- (Optional) Sending notifications to your phone
+The device is now scanning for aircraft over your location. Here's what to expect:
 
-### What to expect
+- **Animated radar sweep** — actively scanning, no aircraft in range yet
+- **Colored screen with flight info** — an aircraft is overhead; shows callsign, type, altitude, and ETA until it leaves your radius
+- The web UI's live preview mirrors the device screen and refreshes every 5 seconds
 
-- **Animated radar sweep**: The device is actively scanning — no aircraft in range yet
-- **Colored screen with flight details**: An aircraft is overhead! Shows callsign, type, altitude, and how long until it leaves your area
-- The web UI's live screen preview shows the same radar animation when scanning
+### Coming back to change settings
 
-### Changing settings later
-
-If you ever want to change your WiFi, location, or notification settings:
-
-1. Find the device's IP address (from the debug screen, or your router's connected devices list)
-2. Open **`http://192.168.1.XX`** in your browser
-3. Update any fields you want
-4. Click **Save & Reboot**
+Open **`http://192.168.1.XX`** (the IP from Step 5) in any browser on your home network, make your changes, and click **Save & Reboot**.
 
 ---
 
 ## Troubleshooting
 
-### The device won't connect to WiFi
+### Device won't connect to WiFi after setup
 
-- Make sure you entered the SSID and password correctly
-- Try restarting your WiFi router
-- Move the device closer to the router
+- The device will fall back to setup mode (broadcasting `PlaneTracker` hotspot) if it can't reach the network — reconnect to `192.168.4.1` and double-check the SSID and password
 
-### Can't find the setup page
+### Can't find `192.168.4.1`
 
-- Make sure you're connected to the **PlaneTracker** WiFi (not your home WiFi)
-- Try `192.168.4.1` again, or refresh (Ctrl+R)
-- Try a different browser
+- Make sure you're connected to the **PlaneTracker** WiFi, not your home network
+- Try refreshing or a different browser
+
+### Can't find the device's IP after it joins home WiFi
+
+- Long-press the button on the device → IP is on line 2 of the debug screen
+- Check the connected devices list in your router's admin page
 
 ### Not getting notifications
 
-- Make sure your **ntfy Topic** matches exactly what you subscribed to in the app
-- Check the debug screen (long-press button) to see if the device is online
-- Try sending a test notification: long-press the button twice on the debug screen
+- Make sure the **ntfy Topic** on the device matches exactly what you subscribed to in the app
+- Use the **Send Test Notification** button on the Notifications tab — it reports the HTTP response code so you can see if the token is valid
 
-### Can't find the device's IP after setup
+### Debug screen shows HTTP error or no aircraft ever appear
 
-- Long-press the button on the device to enter debug mode — the IP is always shown on line 2
-- Alternatively, check the connected devices list on your router
-- If the device won't turn on or the screen is broken, power it off, wait 5 seconds, and power it back on
+- Long-press the button to enter debug mode and check the HTTP status code on line 1
+- Use the **API Test** tab on the settings page to run a live query and inspect the raw response
+- Try increasing the search radius
 
 ---
 
 ## Questions?
 
-If something isn't working, check the **debug screen** on the device (long-press the button for 0.8 seconds). It shows:
-- **Line 1** — HTTP status code and aircraft count from the last API check
-- **Line 2** — device IP address for accessing the setup page
+Long-press the button (0.8 s) to open the debug screen at any time. It shows:
+- **Line 1** — last HTTP status code and aircraft count
+- **Line 2** — device IP address
 - **Line 3** — uptime since last boot
-- **Remaining lines** — raw aircraft data from the last API response
+- **Remaining lines** — raw data from the last API response
 
 Good luck tracking!
