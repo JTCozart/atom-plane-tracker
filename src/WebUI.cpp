@@ -335,11 +335,14 @@ void WebUI::handleRoot() {
           "function doOtaUpdate(){"
             "if(!confirm('Download and install '+document.getElementById('otaLatest').textContent+'? The device will reboot.'))return;"
             "document.getElementById('otaUpdateBtn').disabled=true;"
-            "document.getElementById('otaStatus').textContent='Starting update...';"
+            "document.getElementById('otaStatus').textContent='Downloading - please wait up to 60 seconds...';"
             "fetch('/ota-update',{method:'POST'})"
             ".then(function(r){return r.text();})"
             ".then(function(t){document.open();document.write(t);document.close();})"
-            ".catch(function(){document.getElementById('otaStatus').textContent='Update request failed';});"
+            ".catch(function(e){"
+              "document.getElementById('otaStatus').textContent='Request failed: '+e;"
+              "document.getElementById('otaUpdateBtn').disabled=false;"
+            "});"
           "}"
           "function toggleFullscreen(){"
             "var el=document.getElementById('liveWrap');"
@@ -947,17 +950,16 @@ void WebUI::handleOtaCheck() {
 }
 
 void WebUI::handleOtaUpdate() {
-    // Send the waiting page before the long-running apply() blocks the server.
-    // On success the device reboots; on failure the display shows the error
-    // and the browser's polling reconnects to the still-running old firmware.
-    _server.send(200, "text/html",
-                 buildRebootPage("Updating Firmware",
-                                 "Downloading " + _ota.latestVersion() + "&hellip;"));
-    delay(200);
+    // Block here while downloading and flashing (~30-60 s).
+    // The browser holds the connection open and receives the result when done.
     if (_ota.apply()) {
+        _server.send(200, "text/html",
+                     buildRebootPage("Update Successful",
+                                     "Rebooting to " + _ota.latestVersion() + "&hellip;"));
         delay(500);
         ESP.restart();
+    } else {
+        _server.send(200, "text/html",
+                     buildRebootPage("Update Failed", _ota.statusMessage()));
     }
-    // apply() failed - error is shown on the physical display.
-    // Device keeps running so the user can diagnose and retry.
 }
