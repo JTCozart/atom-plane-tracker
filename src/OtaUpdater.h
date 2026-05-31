@@ -12,6 +12,14 @@ public:
     // Shows progress on the physical display. Device must reboot after success.
     bool apply();
 
+    // Force-install a specific release by download URL and version label.
+    // Bypasses the version comparison check - use for downgrades or re-flashing.
+    void setTarget(const String& downloadUrl, const String& version);
+
+    // Fetch all releases and return a JSON array: [{tag, url}, ...].
+    // Only includes releases that have a suitable OTA .bin asset.
+    String fetchAllReleases();
+
     // True when it is time to run check() - 60 s after boot, then every 24 h.
     bool isDue() const;
 

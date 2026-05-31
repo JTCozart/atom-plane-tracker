@@ -10,8 +10,10 @@
 #define FIRMWARE_VERSION "dev"
 #endif
 
-static const char* kReleasesApi =
+static const char* kReleasesApi    =
     "https://api.github.com/repos/JTCozart/atom-plane-tracker/releases/latest";
+static const char* kAllReleasesApi =
+    "https://api.github.com/repos/JTCozart/atom-plane-tracker/releases";
 
 const char* OtaUpdater::currentVersion() { return FIRMWARE_VERSION; }
 
@@ -218,4 +220,64 @@ bool OtaUpdater::apply() {
     _status = "Update complete";
     Serial.println("[OTA] apply() SUCCESS - rebooting");
     return true;
+}
+
+void OtaUpdater::setTarget(const String& downloadUrl, const String& version) {
+    _downloadUrl   = downloadUrl;
+    _latestVersion = version;
+    _hasUpdate     = true;
+    _status        = "Target set: " + version;
+    Serial.printf("[OTA] setTarget: %s  url: %s\n", version.c_str(), downloadUrl.c_str());
+}
+
+String OtaUpdater::fetchAllReleases() {
+    Serial.printf("[OTA] fetchAllReleases: GET %s\n", kAllReleasesApi);
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, kAllReleasesApi);
+    http.addHeader("User-Agent", "atom-plane-tracker");
+    int code = http.GET();
+    Serial.printf("[OTA] all releases response: %d\n", code);
+
+    if (code != 200) {
+        http.end();
+        return "[]";
+    }
+
+    JsonDocument filter;
+    filter[0]["tag_name"]                          = true;
+    filter[0]["assets"][0]["name"]                 = true;
+    filter[0]["assets"][0]["browser_download_url"] = true;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, http.getStream(),
+                                               DeserializationOption::Filter(filter));
+    http.end();
+    if (err) return "[]";
+
+    String result = "[";
+    bool first = true;
+    for (JsonObject release : doc.as<JsonArray>()) {
+        String tag = release["tag_name"] | "";
+        if (tag.isEmpty()) continue;
+
+        String url = "";
+        for (JsonObject asset : release["assets"].as<JsonArray>()) {
+            String name = asset["name"] | "";
+            if (name.endsWith(".bin") && !name.endsWith("-initial-flash.bin")) {
+                url = asset["browser_download_url"] | "";
+                break;
+            }
+        }
+        if (url.isEmpty()) continue;
+
+        if (!first) result += ",";
+        first = false;
+        result += "{\"tag\":\"" + tag + "\",\"url\":\"" + url + "\"}";
+    }
+    result += "]";
+    Serial.printf("[OTA] fetchAllReleases: found %d releases\n", doc.as<JsonArray>().size());
+    return result;
 }
