@@ -86,6 +86,7 @@ static void validatePollInterval() {
 // ── Render ────────────────────────────────────────────────────────────────────
 
 static void render() {
+    display.setUpdateAvailable(ota.hasUpdate());
     switch (mode) {
         case ScreenMode::Scanning:
             if (store.hasActiveAircraft()) {
@@ -119,7 +120,8 @@ static void render() {
         case ScreenMode::Debug:
             display.showDebug(store.apiResponseLines(), debugScrollOffset,
                               store.lastResponseCode(), store.lastAircraftCount(),
-                              webUI.ipAddress(), millis() / 1000);
+                              webUI.ipAddress(), millis() / 1000,
+                              OtaUpdater::currentVersion());
             break;
     }
 }

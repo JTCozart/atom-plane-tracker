@@ -333,13 +333,16 @@ void WebUI::handleRoot() {
             "});"
           "}"
           "function doOtaUpdate(){"
-            "if(!confirm('Download and install '+document.getElementById('otaLatest').textContent+'? The device will reboot.'))return;"
+            "var ver=document.getElementById('otaLatest').textContent;"
+            "if(!confirm('Download and install '+ver+'? The device will reboot.'))return;"
             "document.getElementById('otaUpdateBtn').disabled=true;"
-            "document.getElementById('otaStatus').textContent='Downloading - please wait up to 60 seconds...';"
+            "document.getElementById('otaModalVersion').textContent=ver;"
+            "document.getElementById('otaModal').classList.add('open');"
             "fetch('/ota-update',{method:'POST'})"
             ".then(function(r){return r.text();})"
             ".then(function(t){document.open();document.write(t);document.close();})"
             ".catch(function(e){"
+              "document.getElementById('otaModal').classList.remove('open');"
               "document.getElementById('otaStatus').textContent='Request failed: '+e;"
               "document.getElementById('otaUpdateBtn').disabled=false;"
             "});"
@@ -529,6 +532,21 @@ void WebUI::handleRoot() {
             "</div>"
             "</div>"
             "</div>"; // end preview-col
+
+    // OTA update progress modal - no close button, cannot be dismissed
+    html += "<div class='modal' id='otaModal' style='z-index:2000'>"
+            "<div style='background:#fff;padding:32px 28px;border-radius:10px;"
+            "text-align:center;max-width:320px;width:90vw'>"
+            "<div style='font-size:2.5em;margin-bottom:12px'>&#128257;</div>"
+            "<div style='font-size:1.1em;font-weight:700;margin-bottom:8px'>Updating Firmware</div>"
+            "<div id='otaModalVersion' style='font-family:monospace;font-size:.9em;"
+            "color:#555;margin-bottom:16px'></div>"
+            "<div style='color:#c00;font-weight:600;margin-bottom:6px'>"
+            "<i class='fa-solid fa-triangle-exclamation' style='margin-right:5px'></i>"
+            "Do not unplug the device</div>"
+            "<div style='font-size:.85em;color:#666'>The device will reboot automatically when complete.</div>"
+            "</div>"
+            "</div>";
 
     // Map picker modal
     html += "<div class='modal' id='mapModal'>"

@@ -113,6 +113,12 @@ void Display::showScanning() {
     _scanCanvas->setCursor(labelX, 100);
     _scanCanvas->print("SCANNING");
 
+    // Update-available indicator: small red up-arrow in top-right corner
+    if (_updateAvailable) {
+        uint16_t red = _scanCanvas->color565(220, 0, 0);
+        _scanCanvas->fillTriangle(120, 2, 114, 11, 126, 11, red);
+    }
+
     // Single atomic transfer to the physical display - no partial-frame flicker
     _scanCanvas->pushSprite(0, 0);
 
@@ -209,6 +215,11 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
         M5.Display.setCursor(x, 111);
         M5.Display.print(typeStr);
     }
+
+    // Update-available indicator: small red up-arrow in top-right corner (live view only)
+    if (_updateAvailable && !isHistorical) {
+        M5.Display.fillTriangle(120, 2, 114, 11, 126, 11, _colorRed);
+    }
 }
 
 // ── Summary screen ────────────────────────────────────────────────────────────
@@ -232,32 +243,33 @@ void Display::showSummary(int militaryCount, int medevacCount, int commercialCou
 
 void Display::showDebug(const std::vector<String>& lines, int scrollOffset,
                          int responseCode, int aircraftCount, const String& ipAddress,
-                         uint32_t uptimeSeconds) {
+                         uint32_t uptimeSeconds, const String& version) {
     M5.Display.fillScreen(_colorBlack);
     M5.Display.setTextColor(_colorWhite, _colorBlack);
     M5.Display.setTextSize(1);
 
-    // Header row 1 - HTTP status and aircraft count
+    // Header rows - 8px spacing so 4 rows fit before content at y=32
     M5.Display.setCursor(0, 0);
     M5.Display.printf("DBG HTTP:%d ac:%d", responseCode, aircraftCount);
 
-    // Header row 2 - device IP (tap-able via browser for config)
-    M5.Display.setCursor(0, 10);
+    M5.Display.setCursor(0, 8);
     M5.Display.printf("IP: %s", ipAddress.c_str());
 
-    // Header row 3 - uptime since boot
-    M5.Display.setCursor(0, 20);
+    M5.Display.setCursor(0, 16);
     uint32_t h = uptimeSeconds / 3600;
     uint32_t m = (uptimeSeconds % 3600) / 60;
     uint32_t s = uptimeSeconds % 60;
     M5.Display.printf("UP: %02u:%02u:%02u", h, m, s);
 
-    // Content lines
+    M5.Display.setCursor(0, 24);
+    M5.Display.printf("VER: %s", version.c_str());
+
+    // Content lines (y=32 .. y=128, 12 lines * 8px)
     int lineTotal = (int)lines.size();
     int maxScroll = max(0, lineTotal - kVisibleLineCount);
     for (int i = 0; i < kVisibleLineCount; i++) {
         int li = scrollOffset + i;
-        M5.Display.setCursor(0, kContentStartY + i * 8);
+        M5.Display.setCursor(0, 32 + i * 8);
         if (li < lineTotal) {
             String line = lines[li];
             if (line.length() > 21) line = line.substring(0, 21);

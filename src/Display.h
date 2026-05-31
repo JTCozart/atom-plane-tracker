@@ -25,7 +25,7 @@ public:
 
     void showDebug(const std::vector<String>& lines, int scrollOffset,
                    int responseCode, int aircraftCount, const String& ipAddress,
-                   uint32_t uptimeSeconds);
+                   uint32_t uptimeSeconds, const String& version);
 
     // Generic 2-line message on a black background (connecting, test-ntfy feedback, etc.)
     void showMessage(const String& line1, const String& line2 = "");
@@ -37,6 +37,9 @@ public:
     // secondsRemaining: countdown until auto-correction (shown to user).
     void showPollIntervalError(uint32_t currentMs, uint32_t minimumMs, int secondsRemaining);
 
+    // Set whether the update-available indicator should be shown on live screens.
+    void setUpdateAvailable(bool v) { _updateAvailable = v; }
+
     // Expose colors for WebUI color conversion
     uint16_t backgroundColorFor(AircraftClass cls) const { return _backgroundColors[toIndex(cls)]; }
     uint16_t foregroundColorFor(AircraftClass cls) const { return _foregroundColors[toIndex(cls)]; }
@@ -46,6 +49,7 @@ private:
     uint16_t  _backgroundColors[4]{};
     uint16_t  _foregroundColors[4]{};
     uint8_t   _scanAnimFrame{0};
+    bool      _updateAvailable{false};
     M5Canvas* _scanCanvas{nullptr};  // off-screen sprite - eliminates flicker
 
     void initColors();

@@ -54,6 +54,7 @@ The debug screen shows device status and raw data from the last API response:
 DBG HTTP:200 ac:7
 IP: 192.168.1.42
 UP: 00:42:17
+VER: v20260531.1342
 A1B2C3 UAL123 B738
  cat:A3 mil:N 35000ft
 ---
@@ -68,6 +69,7 @@ D4E5F6 N12345 C172
 - **Line 1** - last HTTP status code and total aircraft count returned by the API.
 - **Line 2** - device IP address on the local network (see [Configuration web UI](#configuration-web-ui)).
 - **Line 3** - uptime since last boot (`HH:MM:SS`).
+- **Line 4** - current firmware version.
 - **Per aircraft** - ICAO hex, callsign or registration, ICAO type code, ADS-B category, military flag (`Y`/`N`), and barometric altitude.
 - **Short press** - scrolls down 12 lines at a time, wraps to top.
 - **Double short press** (two taps within 400 ms) - sends a test ntfy notification and displays the HTTP response code for 1.5 seconds. Shows `ntfy not configured` if `NTFY_TOPIC` is empty.
