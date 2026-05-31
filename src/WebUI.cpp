@@ -613,9 +613,40 @@ String WebUI::buildScreenDiv() {
         const Aircraft* ac = _store.currentAircraft();
         if (ac) buildAcInner(*ac, false, 0, 0);
     } else if (mode == ScreenMode::Scanning) {
-        inner = "<div style='position:absolute;top:50%;left:50%;"
-                "transform:translate(-50%,-50%);font-size:22px;"
-                "white-space:nowrap'>SCANNING</div>";
+        // Canvas radar sweep — mirrors Display::showScanning() at 2x scale
+        inner = "<canvas id='rc' width='256' height='256' "
+                "style='position:absolute;top:0;left:0'></canvas>"
+                "<script>(function(){"
+                  "var raf=window._radarRaf;"
+                  "if(raf)cancelAnimationFrame(raf);"
+                  "var c=document.getElementById('rc');"
+                  "if(!c)return;"
+                  "var ctx=c.getContext('2d');"
+                  "var cx=128,cy=100,oR=70,iR=36,N=36,fr=0;"
+                  "var trail=['#003200','#008200','#00d200','#00ff00'];"
+                  "function draw(){"
+                    "ctx.fillStyle='#000';ctx.fillRect(0,0,256,256);"
+                    "ctx.lineWidth=1;"
+                    "ctx.strokeStyle='#00ff00';ctx.beginPath();"
+                    "ctx.arc(cx,cy,oR,0,Math.PI*2);ctx.stroke();"
+                    "ctx.strokeStyle='#003200';ctx.beginPath();"
+                    "ctx.arc(cx,cy,iR,0,Math.PI*2);ctx.stroke();"
+                    "ctx.fillStyle='#00ff00';ctx.fillRect(cx,cy,2,2);"
+                    "for(var t=0;t<4;t++){"
+                      "var a=(fr-(3-t))*Math.PI*2/N;"
+                      "ctx.strokeStyle=trail[t];ctx.lineWidth=t===3?2:1;"
+                      "ctx.beginPath();ctx.moveTo(cx,cy);"
+                      "ctx.lineTo(cx+oR*Math.sin(a),cy-oR*Math.cos(a));ctx.stroke();"
+                    "}"
+                    "ctx.fillStyle='#00ff00';ctx.font='bold 12px monospace';"
+                    "var d=Math.floor(fr/(N/4))%4;"
+                    "var lbl='SCANNING'+('...'.slice(0,d));"
+                    "var tw=ctx.measureText(lbl).width;"
+                    "ctx.fillText(lbl,(256-tw)/2,200);"
+                    "fr++;window._radarRaf=requestAnimationFrame(draw);"
+                  "}"
+                  "draw();"
+                "})();</script>";
     } else if (mode == ScreenMode::History) {
         if (_store.historyCount() > 0)
             buildAcInner(_store.historyAt(_store.historyIndex()),
