@@ -8,5 +8,6 @@
 *.pyc
 __pycache__/
 secrets.h
+include/version.h
 memory/
 .claude/

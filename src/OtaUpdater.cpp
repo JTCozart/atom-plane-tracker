@@ -1,4 +1,5 @@
 #include "OtaUpdater.h"
+#include "version.h"
 #include <M5Unified.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>

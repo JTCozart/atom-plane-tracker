@@ -1,4 +1,5 @@
 import subprocess
+import os
 Import("env")
 
 try:
@@ -12,4 +13,7 @@ except Exception:
 if not tag:
     tag = "dev"
 
-env.Append(CPPDEFINES=[("FIRMWARE_VERSION", f'\\"{ tag }\\"')])
+include_dir = env.subst("$PROJECT_INCLUDE_DIR")
+with open(os.path.join(include_dir, "version.h"), "w") as f:
+    f.write('#pragma once\n')
+    f.write(f'#define FIRMWARE_VERSION "{tag}"\n')
