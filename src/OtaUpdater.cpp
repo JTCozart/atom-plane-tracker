@@ -26,15 +26,22 @@ bool OtaUpdater::check() {
     _hasUpdate   = false;
     _status      = "Checking...";
 
+    Serial.println("[OTA] check() started");
+    Serial.printf ("[OTA] current version: %s\n", currentVersion());
+    Serial.printf ("[OTA] GET %s\n", kReleasesApi);
+
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
     http.begin(client, kReleasesApi);
     http.addHeader("User-Agent", "atom-plane-tracker");
     int code = http.GET();
+    Serial.printf("[OTA] releases API response: %d\n", code);
+
     if (code != 200) {
         http.end();
         _status = "Check failed (HTTP " + String(code) + ")";
+        Serial.printf("[OTA] check failed: %s\n", _status.c_str());
         return false;
     }
 
@@ -48,33 +55,59 @@ bool OtaUpdater::check() {
     DeserializationError err = deserializeJson(doc, http.getStream(),
                                                DeserializationOption::Filter(filter));
     http.end();
-    if (err) { _status = "Parse error"; return false; }
+    if (err) {
+        _status = "Parse error";
+        Serial.printf("[OTA] JSON parse error: %s\n", err.c_str());
+        return false;
+    }
 
     _latestVersion = doc["tag_name"] | "";
     _releaseUrl    = doc["html_url"] | "";
     _downloadUrl   = "";
 
+    Serial.printf("[OTA] latest tag: %s\n", _latestVersion.c_str());
+    Serial.printf("[OTA] release url: %s\n", _releaseUrl.c_str());
+
     for (JsonObject asset : doc["assets"].as<JsonArray>()) {
         String name = asset["name"] | "";
+        String url  = asset["browser_download_url"] | "";
+        Serial.printf("[OTA] asset: %s\n", name.c_str());
         if (name.endsWith(".bin") && !name.endsWith("-initial-flash.bin")) {
-            _downloadUrl = asset["browser_download_url"] | "";
+            _downloadUrl = url;
+            Serial.printf("[OTA] selected download url: %s\n", _downloadUrl.c_str());
             break;
         }
     }
 
-    if (_latestVersion.isEmpty()) { _status = "No release found"; return false; }
+    if (_downloadUrl.isEmpty()) {
+        Serial.println("[OTA] no suitable .bin asset found");
+    }
+
+    if (_latestVersion.isEmpty()) {
+        _status = "No release found";
+        Serial.println("[OTA] no release found");
+        return false;
+    }
 
     String cur = currentVersion();
-    // dev builds can always install a release; tagged builds update only when newer.
-    // Tags are date-based (vYYYYMMDD.HHMM) so lexicographic comparison is correct.
     _hasUpdate = !_downloadUrl.isEmpty() &&
                  (cur == "dev" || (_latestVersion != cur && _latestVersion > cur));
     _status    = _hasUpdate ? "Update available" : "Up to date";
+
+    Serial.printf("[OTA] hasUpdate: %s  status: %s\n",
+                  _hasUpdate ? "true" : "false", _status.c_str());
     return _hasUpdate;
 }
 
 bool OtaUpdater::apply() {
-    if (_downloadUrl.isEmpty()) { _status = "No download URL"; return false; }
+    Serial.println("[OTA] apply() started");
+    Serial.printf ("[OTA] download url: %s\n", _downloadUrl.c_str());
+
+    if (_downloadUrl.isEmpty()) {
+        _status = "No download URL";
+        Serial.println("[OTA] apply() aborted: no download URL");
+        return false;
+    }
 
     auto& disp = M5.Display;
     uint16_t black = disp.color565(0,   0,   0);
@@ -84,6 +117,7 @@ bool OtaUpdater::apply() {
 
     auto showError = [&](const String& msg) {
         _status = msg;
+        Serial.printf("[OTA] ERROR: %s\n", msg.c_str());
         disp.fillScreen(red);
         disp.setTextColor(black, red);
         disp.setTextSize(1);
@@ -107,43 +141,67 @@ bool OtaUpdater::apply() {
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.setTimeout(120000);
 
+    Serial.println("[OTA] starting GET request...");
     int code = http.GET();
+    Serial.printf("[OTA] download response: %d\n", code);
+
     if (code != 200) {
         http.end();
         showError("HTTP " + String(code));
         return false;
     }
 
-    int total = http.getSize(); // -1 if server omits Content-Length
+    int total = http.getSize();
+    Serial.printf("[OTA] content-length: %d bytes\n", total);
+
+    Serial.printf("[OTA] free sketch space: %d bytes\n", ESP.getFreeSketchSpace());
+    Serial.printf("[OTA] Update.begin(%d)...\n", total > 0 ? total : -1);
 
     if (!Update.begin(total > 0 ? total : UPDATE_SIZE_UNKNOWN)) {
         http.end();
         showError("Begin failed: " + String(Update.getError()));
         return false;
     }
+    Serial.println("[OTA] Update.begin() OK");
 
-    Update.onProgress([&disp, black, white, green](size_t done, size_t size) {
+    int lastLogPct = -1;
+    Update.onProgress([&lastLogPct, &disp, black, white, green](size_t done, size_t size) {
         if (size == 0) return;
         int pct = (int)(done * 100 / size);
         disp.setTextColor(white, black);
         disp.setCursor(2, 34);
         disp.printf("%d%%  ", pct);
         disp.fillRect(2, 48, pct * 124 / 100, 8, green);
+        if (pct / 10 != lastLogPct / 10) {
+            lastLogPct = pct;
+            Serial.printf("[OTA] progress: %d%% (%d / %d bytes)\n", pct, (int)done, (int)size);
+        }
     });
 
-    Update.writeStream(*http.getStreamPtr());
+    Serial.println("[OTA] calling Update.writeStream()...");
+    size_t written = Update.writeStream(*http.getStreamPtr());
     http.end();
+    Serial.printf("[OTA] writeStream() returned %d bytes written\n", (int)written);
+    Serial.printf("[OTA] Update.progress(): %d\n", (int)Update.progress());
+    Serial.printf("[OTA] Update.hasError(): %s  error code: %d\n",
+                  Update.hasError() ? "true" : "false", Update.getError());
 
     if (Update.hasError()) {
         showError("Write err: " + String(Update.getError()));
         return false;
     }
 
-    if (!Update.end(true)) {
+    Serial.println("[OTA] calling Update.end(true)...");
+    bool ended = Update.end(true);
+    Serial.printf("[OTA] Update.end() returned: %s  error code: %d\n",
+                  ended ? "true" : "false", Update.getError());
+
+    if (!ended) {
         showError("End err: " + String(Update.getError()));
         return false;
     }
 
     _status = "Update complete";
+    Serial.println("[OTA] apply() SUCCESS - rebooting");
     return true;
 }

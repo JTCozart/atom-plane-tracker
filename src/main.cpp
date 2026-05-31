@@ -126,6 +126,7 @@ static void render() {
 // ── Entry points ──────────────────────────────────────────────────────────────
 
 void setup() {
+    Serial.begin(115200);
     auto m5cfg = M5.config();
     M5.begin(m5cfg);
 
