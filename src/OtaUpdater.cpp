@@ -56,7 +56,7 @@ bool OtaUpdater::check() {
 
     for (JsonObject asset : doc["assets"].as<JsonArray>()) {
         String name = asset["name"] | "";
-        if (name.endsWith(".bin")) {
+        if (name.endsWith(".bin") && !name.endsWith("-initial-flash.bin")) {
             _downloadUrl = asset["browser_download_url"] | "";
             break;
         }
