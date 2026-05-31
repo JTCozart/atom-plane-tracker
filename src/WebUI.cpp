@@ -789,6 +789,7 @@ String WebUI::buildScreenDiv() {
         html += "<table style='width:256px;border-collapse:collapse;font-family:monospace;"
                 "font-size:11px;margin-top:6px'>"
                 "<thead><tr style='border-bottom:1px solid #888'>"
+                "<th style='text-align:center;padding:2px 4px'>Cat</th>"
                 "<th style='text-align:left;padding:2px 4px'>Tail</th>"
                 "<th style='text-align:left;padding:2px 4px'>Type</th>"
                 "<th style='text-align:right;padding:2px 4px'>Alt</th>"
@@ -808,7 +809,21 @@ String WebUI::buildScreenDiv() {
             if (eta < 0) strcpy(etaBuf, "--:--");
             else         snprintf(etaBuf, sizeof(etaBuf), "%d:%02d", eta / 60, eta % 60);
 
+            const char* catLetter;
+            switch (ac.classification) {
+                case AircraftClass::Military:   catLetter = "M"; break;
+                case AircraftClass::Medevac:    catLetter = "E"; break;
+                case AircraftClass::Commercial: catLetter = "C"; break;
+                default:                        catLetter = "P"; break;
+            }
+            String catBg  = rgb565ToCss(_display.backgroundColorFor(ac.classification));
+            String catFg  = rgb565ToCss(_display.foregroundColorFor(ac.classification));
+
             html += "<tr style='border-bottom:1px solid #333'>"
+                    "<td style='text-align:center;padding:2px 4px'>"
+                    "<span style='background:" + catBg + ";color:" + catFg + ";"
+                    "padding:1px 5px;border-radius:3px;font-weight:bold'>" + catLetter + "</span>"
+                    "</td>"
                     "<td style='padding:2px 4px'>"
                     "<a href='" + trackUrl + "' target='_blank' style='color:inherit'>" + tail + "</a>"
                     "</td>"
