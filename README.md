@@ -6,8 +6,8 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 
 ## What it does
 
-- Connects to a pre-configured WiFi network on boot and immediately polls for aircraft.
-- Polls [adsb.lol](https://adsb.lol) for aircraft within a configurable radius of a fixed coordinate (poll interval is adjustable).
+- Connects to a pre-configured WiFi network on boot and immediately scans for aircraft.
+- Polls [adsb.lol](https://adsb.lol) for aircraft within a configurable radius of a fixed coordinate (scan interval is adjustable).
 - Classifies each aircraft and changes the screen color accordingly:
 
 | Class | Background | Text | Basis |
@@ -41,7 +41,6 @@ Screen details:
 
 - A new aircraft detected while on HISTORY or SUMMARY interrupts to the live view and returns to SCANNING when it leaves.
 - HISTORY and SUMMARY auto-return to SCANNING after **30 seconds** of no button activity.
-- **Triple-click** toggles the display (screen goes black but device continues running).
 
 ---
 
@@ -94,26 +93,45 @@ The screen shows `SETUP MODE` with the connection details.
 
 Once connected the web server stays active on the device's normal IP address. Open a browser on any device on the same network and go to the IP shown on the debug screen (e.g. `http://192.168.1.42`).
 
-Both modes serve the same form:
+Both modes serve the same settings page, organised into three tabs:
+
+**WiFi tab**
 
 | Field | Description |
 |---|---|
-| WiFi SSID | Network name |
-| WiFi Password | Leave blank to keep the current password |
-| Latitude / Longitude | Center point for aircraft queries (decimal degrees) |
+| SSID | Network name |
+| Password | Leave blank to keep the current password |
+
+**Detection tab**
+
+| Field | Description |
+|---|---|
+| Latitude / Longitude | Center point for aircraft queries (decimal degrees). Use the **Pick on map** button to drop a pin on an interactive map instead of typing coordinates. |
 | Search Radius (NM) | Query radius in nautical miles |
 | Scan Interval (s) | How often to scan for aircraft, in seconds. **Minimum: 10 seconds** |
+
+**Notifications tab**
+
+| Field | Description |
+|---|---|
 | ntfy Token | Leave blank to keep the current token |
 | ntfy Topic | Leave blank to disable notifications |
-| ntfy Classes | Comma-separated filter: `MIL`, `MEDVAC`, `COMM`, `PRIV` — empty = all |
+| ntfy Categories | Checkbox dropdown — select which aircraft classes trigger notifications. Leave all unchecked to notify for all classes. |
 
-**Save & Reboot** button submits all values to on-device flash (NVS) and reboots. **NVS values take priority over `secrets.h`** on every subsequent boot.
+**Save & Reboot** submits all values to on-device flash (NVS) and reboots. **NVS values take priority over `secrets.h`** on every subsequent boot.
 
-**Clear All Settings** button (red, at bottom of form) erases all saved preferences and resets to `secrets.h` defaults. Shows a confirmation dialog to prevent accidental clearing.
+**Clear All Settings** (red button) erases all saved preferences and resets to `secrets.h` defaults. Shows a confirmation dialog to prevent accidental clearing.
 
-### Screen preview
+After saving or clearing, the browser waits for the device to come back online and returns to the settings page automatically. If the device does not reappear within 30 seconds (e.g. WiFi credentials changed) a notice appears explaining how to connect via the setup hotspot.
 
-Navigate to `http://{device-ip}/screen` (or click **View current screen** on the settings page) to see a live HTML rendering of whatever the device is currently displaying — SCANNING, live aircraft, HISTORY, SUMMARY, or DEBUG. Colors match the physical display exactly. The page auto-refreshes at the configured poll interval.
+### Live screen preview
+
+The settings page includes a live rendering of the device screen in a panel alongside the settings form. It refreshes every 5 seconds and shows the current mode — SCANNING, live aircraft, HISTORY, SUMMARY, or DEBUG — with colors matching the physical display. Control buttons below the preview switch the device between modes in real time.
+
+### Other features
+
+- **Dark mode** — toggle in the top-right corner; defaults to your system preference and persists per browser.
+- **Send Test Notification** — button in the Notifications tab sends a test ntfy push and reports the HTTP result inline without saving or rebooting.
 
 ---
 
@@ -128,7 +146,7 @@ The firmware can send push notifications via [ntfy.sh](https://ntfy.sh) when an 
 | Commercial | Default | ✈️ |
 | Private | Low | 🛩️ |
 
-Each notification includes a **FlightRadar24** action button that opens the live flight track using the aircraft's tail number (registration).
+Each notification includes a **Track Flight** action button that opens the live flight on [ADS-B Exchange](https://globe.adsbexchange.com) using the aircraft's ICAO hex code. All notifications use a radar dish icon (📡).
 
 Configure in `secrets.h` (compile-time defaults) or via the **configuration web UI** (saved to NVS, takes priority):
 
@@ -139,7 +157,7 @@ Configure in `secrets.h` (compile-time defaults) or via the **configuration web 
 #define NTFY_CLASSES "MIL,MEDVAC"
 ```
 
-Leave `NTFY_TOPIC` empty to disable notifications entirely. The **double-press test** on the debug screen sends a test notification and shows the HTTP response code, useful for verifying your token and topic without waiting for a real aircraft.
+Leave `NTFY_TOPIC` empty to disable notifications entirely. Test notifications can be sent via the **Send Test Notification** button in the web UI, or by **double-pressing** the button on the debug screen — both report the HTTP response code.
 
 ---
 

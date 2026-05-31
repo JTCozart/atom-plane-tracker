@@ -53,8 +53,16 @@ void WebUI::handleRoot() {
           ".cb{flex:1;padding:8px 0;background:#37474F;color:#fff;border:none;"
           "cursor:pointer;border-radius:4px;font-size:.78em;line-height:1.6}"
           ".cb:hover{background:#546E7A}.cb.on{background:#1976D2}"
-          ".tabs{border:1px solid #ddd;border-radius:6px;overflow:hidden;margin-bottom:4px}"
-          ".tab-hdr{display:flex;background:#f5f5f5;border-bottom:1px solid #ddd}"
+          ".card{border:1px solid #ddd;border-radius:6px;margin-bottom:4px}"
+          ".card-hdr{background:#f5f5f5;border-bottom:1px solid #ddd;padding:10px 14px;"
+          "font-weight:600;font-size:.88em;color:#555;display:flex;align-items:center;gap:7px;"
+          "border-radius:6px 6px 0 0}"
+          ".card-body{padding:14px}"
+          "body.dark .card{border-color:#444}"
+          "body.dark .card-hdr{background:#252525;border-color:#444;color:#aaa}"
+          ".tabs{border:1px solid #ddd;border-radius:6px;margin-bottom:4px}"
+          ".tab-hdr{display:flex;background:#f5f5f5;border-bottom:1px solid #ddd;"
+          "border-radius:6px 6px 0 0}"
           ".tab-btn{flex:1;padding:10px 4px;border:none;background:none;cursor:pointer;"
           "font-size:.85em;border-bottom:3px solid transparent;color:#555}"
           ".tab-btn.on{background:#fff;border-bottom-color:#1976D2;color:#1976D2;font-weight:600}"
@@ -64,6 +72,22 @@ void WebUI::handleRoot() {
           "body.dark .tab-hdr{background:#252525;border-color:#444}"
           "body.dark .tab-btn{color:#aaa}"
           "body.dark .tab-btn.on{background:#1a1a1a;border-bottom-color:#64b5f6;color:#64b5f6}"
+          "body.dark #dmBtn{border-color:#666;color:#e0e0e0}"
+          ".chk-wrap{position:relative;margin-top:3px}"
+          ".chk-btn{width:100%;padding:7px;text-align:left;background:#fff;color:#222;"
+          "border:1px solid #ccc;border-radius:3px;cursor:pointer;font-size:1em;"
+          "display:flex;justify-content:space-between;align-items:center}"
+          ".chk-drop{display:none;position:absolute;left:0;right:0;background:#fff;"
+          "border:1px solid #ccc;border-top:none;border-radius:0 0 3px 3px;"
+          "z-index:200;box-shadow:0 4px 8px rgba(0,0,0,.12)}"
+          ".chk-drop.open{display:block}"
+          ".chk-item{display:flex;align-items:center;gap:8px;padding:8px 10px;"
+          "cursor:pointer;font-size:.95em;font-weight:400;margin:0}"
+          ".chk-item:hover{background:#f0f0f0}"
+          ".chk-item input{margin:0;cursor:pointer;width:auto;accent-color:#1976D2}"
+          "body.dark .chk-btn{background:#2a2a2a;color:#e0e0e0;border-color:#555}"
+          "body.dark .chk-drop{background:#2a2a2a;border-color:#555}"
+          "body.dark .chk-item:hover{background:#333}"
           ".modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);"
           "z-index:1000;align-items:center;justify-content:center}"
           ".modal.open{display:flex}"
@@ -147,8 +171,21 @@ void WebUI::handleRoot() {
             "document.querySelector('[data-tab='+id+']').classList.add('on');"
             "localStorage.setItem('pt-tab',id);"
           "}"
+          "function toggleCats(){"
+            "document.getElementById('catDrop').classList.toggle('open');"
+          "}"
+          "function updateCats(){"
+            "var checked=Array.from(document.querySelectorAll('#catDrop input:checked'));"
+            "document.getElementById('ntfyClasses').value=checked.map(function(c){return c.value;}).join(',');"
+            "var lbl=checked.length?checked.map(function(c){return c.dataset.label;}).join(', '):'All categories';"
+            "document.getElementById('catBtn').innerHTML=lbl+'&nbsp;<i class=\"fa-solid fa-chevron-down\" style=\"font-size:.75em\"></i>';"
+          "}"
+          "document.addEventListener('click',function(e){"
+            "if(!e.target.closest('#catWrap'))document.getElementById('catDrop').classList.remove('open');"
+          "});"
           "document.addEventListener('DOMContentLoaded',function(){"
             "showTab(localStorage.getItem('pt-tab')||'wifi');"
+            "updateCats();"
           "});"
           "refresh();setInterval(refresh,5000);"
           "function toggleDark(){"
@@ -157,7 +194,9 @@ void WebUI::handleRoot() {
             "document.getElementById('dmBtn').innerHTML=d?'<i class=\"fa-solid fa-sun\"></i>':'<i class=\"fa-solid fa-moon\"></i>';"
           "}"
           "document.addEventListener('DOMContentLoaded',function(){"
-            "if(localStorage.getItem('pt-dark')==='1'){"
+            "var stored=localStorage.getItem('pt-dark');"
+            "var sysDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;"
+            "if(stored!==null?stored==='1':sysDark){"
               "document.body.classList.add('dark');"
               "document.getElementById('dmBtn').innerHTML='<i class=\"fa-solid fa-sun\"></i>';"
             "}"
@@ -171,7 +210,8 @@ void WebUI::handleRoot() {
           "<form method='POST' action='/save'>");
 
     // ── Tab header ────────────────────────────────────────────────────────────
-    html += "<div class='tabs'>"
+    html += "<div class='card'>"
+            "<div class='tabs' style='border:none;border-radius:0;margin:0'>"
             "<div class='tab-hdr'>"
             "<button type='button' class='tab-btn' data-tab='wifi'    onclick='showTab(\"wifi\")'>"
             "<i class='fa-solid fa-wifi'></i><br>WiFi</button>"
@@ -218,15 +258,36 @@ void WebUI::handleRoot() {
             "<input name='ntfyToken' type='password' placeholder='leave blank to keep current'>";
     html += "<label>ntfy Topic</label>"
             "<input name='ntfyTopic' value='" + String(_cfg.notifyTopic) + "'>";
-    html += "<label>Classes <small style='font-weight:normal'>(comma-separated: MIL, MEDVAC, COMM, PRIV &mdash; empty&nbsp;=&nbsp;all)</small></label>"
-            "<input name='ntfyClasses' value='" + String(_cfg.notifyClassFilter) + "' placeholder='empty = all classes'>";
+    {
+        // Pre-check boxes based on saved filter; empty filter = all (nothing checked)
+        const char* f = _cfg.notifyClassFilter;
+        bool hasFilter = strlen(f) > 0;
+        String milChk  = (hasFilter && strstr(f, "MIL"))    ? " checked" : "";
+        String medChk  = (hasFilter && strstr(f, "MEDVAC")) ? " checked" : "";
+        String commChk = (hasFilter && strstr(f, "COMM"))   ? " checked" : "";
+        String privChk = (hasFilter && strstr(f, "PRIV"))   ? " checked" : "";
+
+        html += "<label>ntfy Categories</label>"
+                "<div class='chk-wrap' id='catWrap'>"
+                "<button type='button' class='chk-btn' id='catBtn' onclick='toggleCats()'>"
+                "All categories&nbsp;<i class='fa-solid fa-chevron-down' style='font-size:.75em'></i>"
+                "</button>"
+                "<div class='chk-drop' id='catDrop'>"
+                "<label class='chk-item'><input type='checkbox' value='MIL'    data-label='Military'" + milChk  + " onchange='updateCats()'> Military</label>"
+                "<label class='chk-item'><input type='checkbox' value='MEDVAC' data-label='Medevac'"  + medChk  + " onchange='updateCats()'> Medevac</label>"
+                "<label class='chk-item'><input type='checkbox' value='COMM'   data-label='Commercial'" + commChk + " onchange='updateCats()'> Commercial</label>"
+                "<label class='chk-item'><input type='checkbox' value='PRIV'   data-label='Private'"  + privChk + " onchange='updateCats()'> Private</label>"
+                "</div>"
+                "<input type='hidden' name='ntfyClasses' id='ntfyClasses' value='" + String(f) + "'>"
+                "</div>";
+    }
     html += "<button type='button' onclick='testNotify(this)' "
             "style='margin-top:10px;padding:8px 14px;background:#37474F;color:#fff;"
             "border:none;border-radius:4px;cursor:pointer;font-size:.9em;width:100%'>"
             "<i class='fa-solid fa-paper-plane' style='margin-right:6px'></i>Send Test Notification</button>";
     html += "</div>";
 
-    html += "</div>"; // end tabs
+    html += "</div></div>"; // end tabs + card
 
     // ── Save / Clear ──────────────────────────────────────────────────────────
     html += "<button class='btn' type='submit'>"
@@ -241,15 +302,20 @@ void WebUI::handleRoot() {
 
     // Right column — live screen preview + controls
     html += "<div class='preview-col'>"
-            "<h3>Live Screen</h3>"
+            "<div class='card'>"
+            "<div class='card-hdr'>"
+            "<i class='fa-solid fa-display'></i>Live Screen"
+            "</div>"
+            "<div class='card-body' style='text-align:center'>"
             "<div id='scrWrap'></div>"
-            "<div class='ctrl'>"
+            "<div class='ctrl' style='margin-top:10px'>"
             "<button class='cb' data-s='scan'    onclick='ctrl(\"scan\")'><i class='fa-solid fa-satellite-dish'></i><br>Scan</button>"
             "<button class='cb' data-s='history' onclick='ctrl(\"history\")'><i class='fa-solid fa-clock-rotate-left'></i><br>History</button>"
             "<button class='cb' data-s='summary' onclick='ctrl(\"summary\")'><i class='fa-solid fa-chart-bar'></i><br>Summary</button>"
             "<button class='cb' data-s='debug'   onclick='ctrl(\"debug\")'><i class='fa-solid fa-bug'></i><br>Debug</button>"
             "</div>"
-            "<p style='color:#666;font-size:.8em;margin-top:6px'>Refreshes every 5s</p>"
+            "</div>"
+            "</div>"
             "</div>"; // end preview-col
 
     // Map picker modal
@@ -348,11 +414,14 @@ String WebUI::buildRebootPage(const String& heading, const String& subtext) {
     return String(
         "<!DOCTYPE html><html><head><title>PlaneTracker</title>"
         "<style>"
-        "body{font-family:sans-serif;text-align:center;margin-top:60px}"
+        "body{font-family:sans-serif;text-align:center;margin-top:60px;background:#fff;color:#222;transition:background .2s,color .2s}"
+        "body.dark{background:#1a1a1a;color:#e0e0e0}"
         "p{color:#666}"
+        "body.dark p{color:#aaa}"
         "#wifi-warn{display:none;margin:24px auto;max-width:380px;padding:14px 18px;"
         "background:#FFF8E1;border:1px solid #FFB300;border-radius:6px;"
         "color:#5D4037;font-size:.9em;text-align:left;line-height:1.5}"
+        "body.dark #wifi-warn{background:#2d2500;border-color:#6d5800;color:#e0c84a}"
         "</style>"
         "<script>"
         "function poll(){"
@@ -363,6 +432,16 @@ String WebUI::buildRebootPage(const String& heading, const String& subtext) {
         "}"
         "setTimeout(poll,4000);"
         "setTimeout(function(){document.getElementById('wifi-warn').style.display='block';},30000);"
+        "(function(){"
+          "var s=localStorage.getItem('pt-dark');"
+          "var sys=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;"
+          "if(s!==null?s==='1':sys)document.documentElement.classList.add('dark-pending');"
+        "})();"
+        "document.addEventListener('DOMContentLoaded',function(){"
+          "var s=localStorage.getItem('pt-dark');"
+          "var sys=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;"
+          "if(s!==null?s==='1':sys)document.body.classList.add('dark');"
+        "});"
         "</script>"
         "</head><body>"
         "<h2>") + heading + String("</h2>"
