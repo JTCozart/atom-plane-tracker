@@ -35,7 +35,9 @@ private:
     void handleRoot();
     void handleSave();
     void handleClear();
+    void handleControl();
     void handleScreen();
 
+    String buildScreenDiv();   // shared by handleScreen() and handleRoot() fragment
     static String rgb565ToCss(uint16_t c);
 };
