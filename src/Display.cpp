@@ -234,7 +234,8 @@ void Display::showSummary(int militaryCount, int medevacCount, int commercialCou
 // ── Debug screen ──────────────────────────────────────────────────────────────
 
 void Display::showDebug(const std::vector<String>& lines, int scrollOffset,
-                         int responseCode, int aircraftCount, const String& ipAddress) {
+                         int responseCode, int aircraftCount, const String& ipAddress,
+                         uint32_t uptimeSeconds) {
     M5.Display.fillScreen(_colorBlack);
     M5.Display.setTextColor(_colorWhite, _colorBlack);
     M5.Display.setTextSize(1);
@@ -246,6 +247,13 @@ void Display::showDebug(const std::vector<String>& lines, int scrollOffset,
     // Header row 2 — device IP (tap-able via browser for config)
     M5.Display.setCursor(0, 10);
     M5.Display.printf("IP: %s", ipAddress.c_str());
+
+    // Header row 3 — uptime since boot
+    M5.Display.setCursor(0, 20);
+    uint32_t h = uptimeSeconds / 3600;
+    uint32_t m = (uptimeSeconds % 3600) / 60;
+    uint32_t s = uptimeSeconds % 60;
+    M5.Display.printf("UP: %02lu:%02lu:%02lu", h, m, s);
 
     // Content lines
     int lineTotal = (int)lines.size();

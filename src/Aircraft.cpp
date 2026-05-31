@@ -24,11 +24,12 @@ const char* aircraftClassTag(AircraftClass cls) {
 // FAA LIFEGUARD prefix is a regulated designation — safe to match on callsign.
 // All other classification comes from the API's own fields.
 static const char* MEDVAC_CS[] = {
-    "LIFEGRD", "MEDVAC", "AIRLIFE", nullptr
+    "LIFEGRD", "MEDVAC", "AIRLIFE", "REACH", "LIFEFLT", nullptr
 };
 static const char* MEDVAC_OP[] = {
     "AIR LIFE", "AIR METHODS", "PHI AIR", "METRO AVIA",
-    "OMNIFLIGHT", "GUARDIAN FL", nullptr
+    "OMNIFLIGHT", "GUARDIAN FL", "LIFE FLIGHT", "LIFEFLIGHT",
+    "AIR EVAC", "REACH AIR", "EMS", nullptr
 };
 
 static bool startsWithAny(const String& s, const char** list) {

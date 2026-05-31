@@ -6,8 +6,8 @@
 
 class Display {
 public:
-    static constexpr int kVisibleLineCount = 13;
-    static constexpr int kContentStartY    = 20;
+    static constexpr int kVisibleLineCount = 12;
+    static constexpr int kContentStartY    = 30;
 
     // Initialise color tables — must be called after M5.begin()
     void begin();
@@ -24,7 +24,8 @@ public:
     void showSummary(int militaryCount, int medevacCount, int commercialCount, int privateCount);
 
     void showDebug(const std::vector<String>& lines, int scrollOffset,
-                   int responseCode, int aircraftCount, const String& ipAddress);
+                   int responseCode, int aircraftCount, const String& ipAddress,
+                   uint32_t uptimeSeconds);
 
     // Generic 2-line message on a black background (connecting, test-ntfy feedback, etc.)
     void showMessage(const String& line1, const String& line2 = "");

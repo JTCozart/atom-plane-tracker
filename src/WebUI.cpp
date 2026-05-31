@@ -2,6 +2,9 @@
 #include "Notifier.h"
 #include <WiFi.h>
 #include <Preferences.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -21,6 +24,7 @@ void WebUI::begin(ScreenMode& mode, bool isSetupMode) {
     _server.on("/control",     HTTP_GET,  [this]() { handleControl();    });
     _server.on("/screen",      HTTP_GET,  [this]() { handleScreen();     });
     _server.on("/notify-test", HTTP_POST, [this]() { handleNotifyTest(); });
+    _server.on("/ntfy-stats",  HTTP_GET,  [this]() { handleNtfyStats();  });
     _server.begin();
 }
 
@@ -107,6 +111,8 @@ void WebUI::handleRoot() {
           "body.dark .map-hint{color:#aaa}"
           "body.dark #dmBtn{border-color:#666;color:#e0e0e0}"
           "body.dark a{color:#64b5f6}"
+          "body.dark #ntfyUsage{color:#aaa}"
+          "body.dark .usage-box{border-color:#444}"
           "</style>"
           "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
           "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css'>"
@@ -150,6 +156,27 @@ void WebUI::handleRoot() {
           "function closeMap(){"
             "document.getElementById('mapModal').classList.remove('open');"
           "}"
+          "function loadNtfyStats(btn){"
+            "if(btn){btn.disabled=true;btn.textContent='Checking...';}"
+            "fetch('/ntfy-stats')"
+            ".then(function(r){return r.json();})"
+            ".then(function(d){"
+              "var el=document.getElementById('ntfyUsage');"
+              "if(!el)return;"
+              "if(d.error){"
+                "el.textContent=d.error==='not_configured'?'Configure token first':'Error: '+d.error;"
+              "}else{"
+                "var pct=d.limit>0?Math.round(d.sent/d.limit*100):0;"
+                "el.innerHTML=d.sent+' sent / '+d.limit+(d.limit>0?' ('+pct+'%)':'')"
+                "+'<br><span style=\"color:#4CAF50\">'+d.remaining+' remaining</span>';"
+              "}"
+              "if(btn){btn.disabled=false;btn.textContent='Refresh';}"
+            "}).catch(function(){"
+              "var el=document.getElementById('ntfyUsage');"
+              "if(el)el.textContent='Request failed';"
+              "if(btn){btn.disabled=false;btn.textContent='Refresh';}"
+            "});"
+          "}"
           "function testNotify(btn){"
             "btn.disabled=true;btn.textContent='Sending...';"
             "fetch('/notify-test',{method:'POST'})"
@@ -170,6 +197,7 @@ void WebUI::handleRoot() {
             "document.getElementById('tab-'+id).classList.add('on');"
             "document.querySelector('[data-tab='+id+']').classList.add('on');"
             "localStorage.setItem('pt-tab',id);"
+            "if(id==='notify')loadNtfyStats(null);"
           "}"
           "function toggleCats(){"
             "document.getElementById('catDrop').classList.toggle('open');"
@@ -285,6 +313,18 @@ void WebUI::handleRoot() {
             "style='margin-top:10px;padding:8px 14px;background:#37474F;color:#fff;"
             "border:none;border-radius:4px;cursor:pointer;font-size:.9em;width:100%'>"
             "<i class='fa-solid fa-paper-plane' style='margin-right:6px'></i>Send Test Notification</button>";
+    html += "<div style='margin-top:14px;padding:10px 12px;border:1px solid #ddd;"
+            "border-radius:4px;font-size:.85em'>"
+            "<div style='display:flex;justify-content:space-between;align-items:center;"
+            "margin-bottom:6px'>"
+            "<span style='font-weight:600;color:#555'>"
+            "<i class='fa-solid fa-chart-simple' style='margin-right:5px'></i>Account Usage</span>"
+            "<button type='button' onclick='loadNtfyStats(this)' "
+            "style='padding:3px 9px;background:#37474F;color:#fff;border:none;"
+            "border-radius:3px;cursor:pointer;font-size:.82em'>Refresh</button>"
+            "</div>"
+            "<div id='ntfyUsage' style='color:#666'>Loading&hellip;</div>"
+            "</div>";
     html += "</div>";
 
     html += "</div></div>"; // end tabs + card
@@ -408,6 +448,51 @@ void WebUI::handleNotifyTest() {
     }
     int code = Notifier::sendTestHttp(_cfg);
     _server.send(200, "text/plain", String(code));
+}
+
+void WebUI::handleNtfyStats() {
+    if (strlen(_cfg.notifyToken) == 0) {
+        _server.send(200, "application/json", "{\"error\":\"not_configured\"}");
+        return;
+    }
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, "https://ntfy.sh/v1/account");
+    http.addHeader("Authorization", String("Bearer ") + _cfg.notifyToken);
+    int code = http.GET();
+
+    if (code != 200) {
+        http.end();
+        _server.send(200, "application/json",
+                     "{\"error\":\"http_" + String(code) + "\"}");
+        return;
+    }
+
+    JsonDocument filter;
+    filter["stats"]["messages"]           = true;
+    filter["stats"]["messages_remaining"] = true;
+    filter["limits"]["messages"]          = true;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, http.getStream(),
+                                               DeserializationOption::Filter(filter));
+    http.end();
+
+    if (err) {
+        _server.send(200, "application/json", "{\"error\":\"parse_error\"}");
+        return;
+    }
+
+    long sent      = doc["stats"]["messages"]           | -1L;
+    long remaining = doc["stats"]["messages_remaining"] | -1L;
+    long limit     = doc["limits"]["messages"]          | -1L;
+
+    char buf[72];
+    snprintf(buf, sizeof(buf), "{\"sent\":%ld,\"remaining\":%ld,\"limit\":%ld}",
+             sent, remaining, limit);
+    _server.send(200, "application/json", String(buf));
 }
 
 String WebUI::buildRebootPage(const String& heading, const String& subtext) {

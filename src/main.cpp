@@ -114,7 +114,7 @@ static void render() {
         case ScreenMode::Debug:
             display.showDebug(store.apiResponseLines(), debugScrollOffset,
                               store.lastResponseCode(), store.lastAircraftCount(),
-                              webUI.ipAddress());
+                              webUI.ipAddress(), millis() / 1000);
             break;
     }
 }
