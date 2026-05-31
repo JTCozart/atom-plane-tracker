@@ -101,39 +101,26 @@ bool OtaUpdater::apply() {
         return false;
     }
 
-    int total = http.getSize();
-    if (total <= 0) { http.end(); _status = "Unknown content length"; return false; }
+    int total = http.getSize(); // may be -1 if server omits Content-Length
 
-    if (!Update.begin(total)) {
+    if (!Update.begin(total > 0 ? total : UPDATE_SIZE_UNKNOWN)) {
         http.end();
         _status = "Not enough flash space";
         return false;
     }
 
-    WiFiClient* stream = http.getStreamPtr();
-    uint8_t  buf[512];
-    int      written = 0;
-    int      lastPct = -1;
+    Update.onProgress([&disp, black, white, green](size_t done, size_t size) {
+        if (size == 0) return;
+        int pct = (int)(done * 100 / size);
+        disp.setTextColor(white, black);
+        disp.setCursor(2, 34);
+        disp.printf("%d%%  ", pct);
+        disp.fillRect(2, 48, pct * 124 / 100, 8, green);
+    });
 
-    while (http.connected() && written < total) {
-        int avail = stream->available();
-        if (avail > 0) {
-            int n = stream->readBytes(buf, min(avail, (int)sizeof(buf)));
-            Update.write(buf, n);
-            written += n;
-            int pct = written * 100 / total;
-            if (pct != lastPct) {
-                lastPct = pct;
-                disp.setCursor(2, 34);
-                disp.printf("%d%%  ", pct);
-                disp.fillRect(2, 48, pct * 124 / 100, 8, green);
-            }
-        }
-        delay(1);
-    }
+    Update.writeStream(*http.getStreamPtr());
     http.end();
 
-    if (written != total) { Update.abort(); _status = "Write incomplete"; return false; }
     if (!Update.end(true)) {
         _status = "Finalize failed (err " + String(Update.getError()) + ")";
         return false;
