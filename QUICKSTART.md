@@ -72,7 +72,11 @@ The device will:
 
 You need to set the **latitude** and **longitude** where you want to track aircraft.
 
-### Quick method (use your current location):
+### Easiest method (use the built-in map picker):
+
+On the setup page, open the **Detection** tab and click **Pick on map**. An interactive map opens — click anywhere to drop a pin and automatically fill in the latitude and longitude fields. No need to look up coordinates manually.
+
+### Manual method (Google Maps):
 
 1. Go to **Google Maps** on your phone
 2. Tap your current location (the blue dot)
@@ -99,6 +103,7 @@ The device shows its IP address on the debug screen. Here's how:
 ```
 DBG HTTP:200 ac:7
 IP: 192.168.1.XX
+UP: 00:04:32
 [rest of debug info...]
 ```
 
@@ -112,14 +117,18 @@ IP: 192.168.1.XX
 
 ## Step 7: Set your location and preferences
 
-On the device's setup page, update these fields:
+On the device's setup page, click the **Detection** tab and fill in:
 
 | Field | What to enter |
 |---|---|
-| **Latitude** | Your latitude (from Google Maps) |
-| **Longitude** | Your longitude (from Google Maps) |
+| **Latitude** | Your latitude (from Google Maps or the map picker) |
+| **Longitude** | Your longitude (from Google Maps or the map picker) |
 | **Search Radius (NM)** | How far to search for aircraft (nautical miles). Default: 10 NM ≈ 11.5 statute miles |
-| **Poll Interval (ms)** | How often to check for aircraft (milliseconds). Default: 15000 = 15 seconds. **Must be at least 10000 (10 seconds)** |
+| **Scan Interval (s)** | How often to check for aircraft, in seconds. Default: 15. **Minimum: 10 seconds** |
+
+### Optional: verify your settings before saving
+
+Click the **API Test** tab and press **Run Test**. The device will fire a live query using the coordinates and radius you just entered and display the raw response. If you see aircraft in the JSON you're all set; if it's empty try increasing the radius.
 
 Click **Save & Reboot**.
 
@@ -169,18 +178,20 @@ If you want your phone to notify you when aircraft pass overhead:
 ### 8e. Add ntfy settings to the device
 
 1. Go back to your device's setup page: **`http://192.168.1.XX`** (the IP you found in Step 6)
-2. Scroll down to the **"ntfy"** section
+2. Click the **Notifications** tab
 3. Fill in:
 
 | Field | What to enter |
 |---|---|
 | **ntfy Token** | The access token from step 8d |
 | **ntfy Topic** | Your unique topic name (e.g., `airplane-tracker-myname-12345`) |
-| **ntfy Classes** | (Optional) Which aircraft to notify about: `MIL,MEDVAC,COMM,PRIV` (empty = all) |
+| **ntfy Categories** | (Optional) Which aircraft classes trigger notifications — leave all unchecked for all classes |
 
 4. Click **Save & Reboot**
 
-Now, whenever an aircraft enters your search radius, you'll get a notification on your phone with a **FlightRadar24** button that opens the live flight.
+Now, whenever an aircraft enters your search radius, you'll get a notification on your phone with a **Track Flight** button that opens the live flight on ADS-B Exchange.
+
+> **Tip:** After saving, return to the Notifications tab and check the **Account Usage** box to confirm your remaining daily message quota.
 
 ---
 
@@ -193,9 +204,9 @@ The device is now:
 
 ### What to expect
 
-- **Black screen with "SCANNING"**: The device is listening for aircraft
+- **Animated radar sweep**: The device is actively scanning — no aircraft in range yet
 - **Colored screen with flight details**: An aircraft is overhead! Shows callsign, type, altitude, and how long until it leaves your area
-- **Animated radar sweep**: Smooth animation showing the device is actively scanning (not stuck)
+- The web UI's live screen preview shows the same radar animation when scanning
 
 ### Changing settings later
 
@@ -231,6 +242,7 @@ If you ever want to change your WiFi, location, or notification settings:
 ### Can't find the device's IP after setup
 
 - Long-press the button on the device to enter debug mode — the IP is always shown on line 2
+- Alternatively, check the connected devices list on your router
 - If the device won't turn on or the screen is broken, power it off, wait 5 seconds, and power it back on
 
 ---
@@ -238,8 +250,9 @@ If you ever want to change your WiFi, location, or notification settings:
 ## Questions?
 
 If something isn't working, check the **debug screen** on the device (long-press the button for 0.8 seconds). It shows:
-- **HTTP status code** and **aircraft count** from the last API check
-- **Device IP address** for accessing the setup page
-- **Raw data** from the API response
+- **Line 1** — HTTP status code and aircraft count from the last API check
+- **Line 2** — device IP address for accessing the setup page
+- **Line 3** — uptime since last boot
+- **Remaining lines** — raw aircraft data from the last API response
 
 Good luck tracking!
