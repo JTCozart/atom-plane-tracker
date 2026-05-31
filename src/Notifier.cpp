@@ -35,9 +35,8 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
              aircraft.type.length() ? aircraft.type.c_str() : "???",
              aircraft.altitude);
 
-    // FlightRadar24 link by tail number (registration) — fall back to ICAO if not available
-    String fr24Url = "https://www.flightradar24.com/" +
-                     (aircraft.registration.length() ? aircraft.registration : aircraft.icao);
+    // ADS-B Exchange globe link by ICAO hex — pure web app, no app redirect conflicts
+    String trackUrl = "https://globe.adsbexchange.com/?icao=" + aircraft.icao;
 
     WiFiClientSecure client;
     client.setInsecure();
@@ -48,7 +47,7 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     http.addHeader("Title",    String(aircraftClassName(aircraft.classification)) + " Aircraft Detected");
     http.addHeader("Priority", priority);
     http.addHeader("Tags",     tags);
-    http.addHeader("Action",   "view, FlightRadar24, " + fr24Url + ", clear=true");
+    http.addHeader("Action",   "view, Track Flight, " + trackUrl + ", clear=true");
     http.POST(body);
     http.end();
 }
