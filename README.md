@@ -257,8 +257,6 @@ Data comes from **[adsb.lol](https://adsb.lol)** — a community-run, free ADS-B
 GET https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{radius_nm}
 ```
 
-A commented fallback URL for [airplanes.live](https://airplanes.live) (`api.adsb.one`) is in `src/AircraftStore.cpp` — identical response format, swap by uncommenting.
-
 ---
 
 ## Getting started

@@ -7,7 +7,6 @@
 #include <set>
 
 // adsb.lol — free, no API key, ADSBExchange v2 format, radius in NM
-// Fallback: "https://api.adsb.one/v2/point/%.6f/%.6f/%.1f"
 static const char* API_FMT = "https://api.adsb.lol/v2/lat/%.6f/lon/%.6f/dist/%.1f";
 
 // ── History ───────────────────────────────────────────────────────────────────
