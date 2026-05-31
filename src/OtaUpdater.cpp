@@ -64,8 +64,10 @@ bool OtaUpdater::check() {
     if (_latestVersion.isEmpty()) { _status = "No release found"; return false; }
 
     String cur = currentVersion();
+    // dev builds can always install a release; tagged builds update only when newer.
     // Tags are date-based (vYYYYMMDD.HHMM) so lexicographic comparison is correct.
-    _hasUpdate = (cur != "dev" && _latestVersion != cur && _latestVersion > cur);
+    _hasUpdate = !_downloadUrl.isEmpty() &&
+                 (cur == "dev" || (_latestVersion != cur && _latestVersion > cur));
     _status    = _hasUpdate ? "Update available" : "Up to date";
     return _hasUpdate;
 }
