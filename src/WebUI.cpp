@@ -927,9 +927,13 @@ void WebUI::handleRoot() {
 
     html += "<div style='text-align:center;margin-top:24px;padding-bottom:16px;font-size:.85em;color:#888'>"
             "<a href='https://github.com/JTCozart/atom-plane-tracker' target='_blank' "
-            "style='color:inherit;text-decoration:none'>"
+            "style='color:inherit;text-decoration:none;margin-right:20px'>"
             "<i class='fa-brands fa-github' style='font-size:1.4em;margin-right:6px;vertical-align:middle'></i>"
             "JTCozart/atom-plane-tracker</a>"
+            "<a href='https://linktr.ee/jtczrt' target='_blank' "
+            "style='color:inherit;text-decoration:none'>"
+            "<i class='fa-solid fa-tree' style='font-size:1.4em;margin-right:6px;vertical-align:middle'></i>"
+            "linktr.ee/jtczrt</a>"
             "</div>";
     html += "</div></body></html>"; // end layout + body
 
