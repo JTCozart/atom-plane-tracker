@@ -29,7 +29,7 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 
 | Button Action | Effect |
 |---|---|
-| **Short press** | Cycle through screens: SCANNING → HISTORY → SUMMARY → SCANNING |
+| **Short press** | Cycle through screens: SCANNING → HISTORY → SUMMARY → RADAR → SCANNING |
 | **Long press** (0.8 s) | Enter/exit DEBUG mode |
 
 Screen details:
@@ -37,9 +37,11 @@ Screen details:
 | Screen | Description |
 |---|---|
 | **SCANNING** | Animated radar sweep showing scanning is active. When aircraft are overhead this shows the live detection screen instead. |
-| **HISTORY** | Last 5 detected aircraft. Each press advances to the next older entry - `[ HIST 1/5 ]` counter shown in the red bar at the bottom. After the last entry one more press moves to SUMMARY. |
-| **SUMMARY** | Session totals by class (Military, Medevac, Commercial, Private). |
+| **HISTORY** | Last 5 detected aircraft. Each press advances to the next older entry — `[ 1/5 ]` counter shown in the red bar at the bottom. After the last entry one more press moves to SUMMARY. |
+| **SUMMARY** | Session totals by class (Military, Medevac, Commercial, Private). Single press advances to RADAR. **Double press** (two taps within 400 ms) clears all session totals. |
+| **RADAR** | Top-down radar view showing all currently overhead aircraft as colored triangles pointing in their direction of travel. Single press returns to SCANNING. |
 
+- If no history has been recorded yet, SCANNING skips directly to SUMMARY.
 - A new aircraft detected while on HISTORY or SUMMARY interrupts to the live view and returns to SCANNING when it leaves.
 - HISTORY and SUMMARY auto-return to SCANNING after **30 seconds** of no button activity.
 
@@ -72,7 +74,7 @@ D4E5F6 N12345 C172
 - **Line 3** - uptime since last boot (`HH:MM:SS`).
 - **Line 4** - current firmware version.
 - **Per aircraft** - ICAO hex, callsign or registration, ICAO type code, squawk code (`----` if not broadcast), military flag (`Y`/`N`), and barometric altitude.
-- **Short press** - scrolls down 12 lines at a time, wraps to top.
+- **Short press** - scrolls down 10 lines at a time, wraps to top.
 - **Double short press** (two taps within 400 ms) - sends a test ntfy notification and displays the HTTP response code for 1.5 seconds. Shows `ntfy not configured` if `NTFY_TOPIC` is empty.
 - Scroll position is preserved while in debug. Aircraft arrivals and departures do not exit debug mode.
 
@@ -98,7 +100,7 @@ The screen shows `SETUP MODE` with the connection details.
 
 Once connected the web server stays active on the device's normal IP address. Open a browser on any device on the same network and go to the IP shown on the debug screen (e.g. `http://192.168.1.42`).
 
-Both modes serve the same settings page, organised into four tabs:
+Both modes serve the same settings page, organised into five tabs:
 
 **WiFi tab**
 
@@ -128,6 +130,10 @@ An **Account Usage** box at the bottom of the Notifications tab shows messages s
 **API Test tab**
 
 Runs a live query to adsb.lol using the lat/lon/radius currently entered in the Detection tab (no need to save first). The raw JSON response is pretty-printed in a scrollable green-on-black terminal window. Useful for verifying coordinates and radius before committing them.
+
+**Update tab**
+
+Shows the current firmware version and the latest available release. Clicking **Check for Updates** fetches the GitHub releases API and compares versions. If an update is available an **Update Now** button appears — tapping it downloads and applies the firmware over-the-air (~30 seconds) and reboots automatically. The device also checks every 24 hours in the background.
 
 **Save & Reboot** submits all values to on-device flash (NVS) and reboots. **NVS values take priority over `secrets.h`** on every subsequent boot.
 
@@ -198,7 +204,7 @@ PlatformIO automatically downloads the ESP32 toolchain and all library dependenc
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/your-username/atom-plane-tracker.git
+git clone https://github.com/JTCozart/atom-plane-tracker.git
 cd atom-plane-tracker
 ```
 
@@ -299,22 +305,28 @@ atom-plane-tracker/
 ├── README.md                   # This file
 ├── QUICKSTART.md               # Quick-start guide for new users
 ├── src/
-│   ├── main.cpp                # Setup, loop, button/display logic
-│   ├── Aircraft.h/cpp          # Aircraft classification & ETA calculation
-│   ├── AircraftStore.h/cpp     # Aircraft state, history, API polling
-│   ├── AppState.h              # Screen mode enum
+│   ├── main.cpp                # Setup, loop, button handling, render dispatch
+│   ├── Aircraft.h/cpp          # Aircraft struct, classification, ETA & geometry
+│   ├── AircraftJsonApi.h/cpp   # JSON serialisation for /aircraft and /history endpoints
+│   ├── AircraftPersistence.h/cpp # NVS read/write for history and detection counts
+│   ├── AircraftStore.h/cpp     # Active aircraft state, history, detection counts
+│   ├── AdsbLolSource.h/cpp     # IAircraftSource implementation — adsb.lol HTTP fetch
+│   ├── AppState.h              # ScreenMode enum
 │   ├── Config.h/cpp            # Configuration struct, NVS persistence
-│   ├── Display.h/cpp           # All display drawing (including animated scanning)
+│   ├── Display.h/cpp           # All display drawing (physical screen)
+│   ├── FetchEffect.h           # Return type for AircraftStore::fetch()
+│   ├── IAircraftSource.h       # Abstract interface for aircraft data sources
 │   ├── Notifier.h/cpp          # ntfy.sh push notifications
 │   ├── OtaUpdater.h/cpp        # GitHub release check and OTA firmware update
-│   └── WebUI.h/cpp             # HTTP server, configuration web UI
+│   ├── ScreenController.h/cpp  # Screen mode state, cycling, double-click, debug scroll
+│   └── WebUI.h/cpp             # HTTP server, configuration web UI, screen preview
 ├── include/
 │   ├── secrets.h               # Your credentials - gitignored, never committed
 │   └── secrets.h.example       # Safe template to copy from
 └── .gitignore
 ```
 
-**Architecture**: Refactored to follow SOLID principles. Thin `main.cpp` orchestrates independent, single-responsibility classes.
+**Architecture**: Built to SOLID principles. Each class has a single responsibility; dependencies are injected via constructor (no globals passed between modules). Adding a new screen mode, aircraft data source, or persistence backend requires changing only the relevant class.
 
 ---
 

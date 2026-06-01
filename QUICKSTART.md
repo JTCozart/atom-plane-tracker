@@ -170,6 +170,8 @@ The device is now scanning for aircraft over your location. Here's what to expec
 - **Colored screen with flight info** - an aircraft is overhead; shows callsign, type, altitude, ETA, and squawk code (emergency codes flash red)
 - The web UI's live preview mirrors the device screen and refreshes every 5 seconds
 
+**Button navigation:** Short press cycles through screens — SCANNING → HISTORY → SUMMARY → RADAR → SCANNING. Long press (0.8 s) enters the debug screen from any mode; long press again to exit.
+
 ### Future firmware updates
 
 The device checks for new firmware releases automatically every 24 hours. If you enabled **Updates** notifications you'll get a push alert when one is available. You can also check manually in the **Update** tab of the settings page and install with one click - no computer required.

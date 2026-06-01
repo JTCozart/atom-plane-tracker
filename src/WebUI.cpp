@@ -1,6 +1,7 @@
 ﻿#include "WebUI.h"
 #include "Notifier.h"
 #include <WiFi.h>
+#include <freertos/task.h>
 #include <Preferences.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -8,8 +9,7 @@
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
-void WebUI::begin(ScreenMode& mode, bool isSetupMode) {
-    _screenMode  = &mode;
+void WebUI::begin(bool isSetupMode) {
     _inSetupMode = isSetupMode;
 
     if (isSetupMode) {
@@ -42,7 +42,7 @@ void WebUI::processRequests() {
 
 void WebUI::handleRoot() {
     String html =
-        F("<!DOCTYPE html><html><head><title>PlaneTracker Setup</title>"
+        F("<!DOCTYPE html><html><head><title>PlaneTracker</title>"
           "<meta name='viewport' content='width=device-width,initial-scale=1'>"
           "<style>"
           "body{font-family:sans-serif;max-width:820px;margin:24px auto;padding:0 12px;"
@@ -214,10 +214,13 @@ void WebUI::handleRoot() {
             ".then(function(r){return r.text();})"
             ".then(function(h){"
               "if(window._radarRaf){cancelAnimationFrame(window._radarRaf);window._radarRaf=null;}"
+              "if(window._radarBlipsTimer){clearTimeout(window._radarBlipsTimer);window._radarBlipsTimer=null;}"
               "var e=document.getElementById('scrWrap');"
               "if(e)e.innerHTML=h;"
               "var rc=document.getElementById('rc');"
               "if(rc)startRadar(rc);"
+              "var rb=document.getElementById('radarBc');"
+              "if(rb)startRadarBlips(rb);"
               "startEtaCountdown();"
             "})"
             ".catch(function(){});"
@@ -228,6 +231,61 @@ void WebUI::handleRoot() {
             "fetch('/control?screen='+s).then(function(){setTimeout(refresh,300);});"
             "document.querySelectorAll('.cb').forEach(function(b){"
               "b.classList.toggle('on',b.dataset.s===s);});"
+          "}"
+          "function startRadarBlips(c){"
+            "if(window._radarBlipsTimer)clearTimeout(window._radarBlipsTimer);"
+            "var ctx=c.getContext('2d'),W=c.width,H=c.height;"
+            "var cx=W/2,cy=H/2,oR=Math.min(W,H)/2-18,iR=oR/2;"
+            "function bearNm(lat,lon){"
+              "var dlon=(lon-cfgLon)*Math.cos(cfgLat*Math.PI/180);"
+              "var dlat=lat-cfgLat;"
+              "var brg=(Math.atan2(dlon,dlat)*180/Math.PI+360)%360;"
+              "var dist=Math.sqrt(dlat*dlat+dlon*dlon)*60;"
+              "return{brg:brg,dist:dist};"
+            "}"
+            "function draw(aircraft){"
+              "ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);"
+              "ctx.strokeStyle='#004400';ctx.lineWidth=1;"
+              "[oR,iR].forEach(function(r){"
+                "ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();"
+              "});"
+              "ctx.beginPath();ctx.moveTo(cx,cy-oR);ctx.lineTo(cx,cy+oR);ctx.stroke();"
+              "ctx.beginPath();ctx.moveTo(cx-oR,cy);ctx.lineTo(cx+oR,cy);ctx.stroke();"
+              "ctx.fillStyle='#00cc00';ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fill();"
+              "ctx.fillStyle='#00cc00';ctx.font='bold 13px monospace';"
+              "ctx.textAlign='center';"
+              "ctx.fillText('N',cx,cy-oR-5);"
+              "ctx.fillText('S',cx,cy+oR+14);"
+              "ctx.textAlign='left'; ctx.fillText('E',cx+oR+4,cy+5);"
+              "ctx.textAlign='right';ctx.fillText('W',cx-oR-4,cy+5);"
+              "if(aircraft)aircraft.forEach(function(ac){"
+                "if(!ac.lat||!ac.lon)return;"
+                "var bn=bearNm(ac.lat,ac.lon);"
+                "var ratio=Math.min(bn.dist/(cfgRadiusM/1852),1);"
+                "var rad=bn.brg*Math.PI/180;"
+                "var bx=cx+ratio*oR*Math.sin(rad);"
+                "var by=cy-ratio*oR*Math.cos(rad);"
+                "var tRad=(ac.track||0)*Math.PI/180,r=6;"
+                "var ttx=bx+r*Math.sin(tRad),tty=by-r*Math.cos(tRad);"
+                "var tlx=bx+r*0.65*Math.sin(tRad+2.3),tly=by-r*0.65*Math.cos(tRad+2.3);"
+                "var trx=bx+r*0.65*Math.sin(tRad-2.3),try_=by-r*0.65*Math.cos(tRad-2.3);"
+                "ctx.fillStyle=ac.bg;"
+                "ctx.beginPath();ctx.moveTo(ttx,tty);ctx.lineTo(tlx,tly);ctx.lineTo(trx,try_);ctx.closePath();ctx.fill();"
+                "ctx.fillStyle='#fff';"
+                "ctx.beginPath();ctx.arc(ttx,tty,1.5,0,Math.PI*2);ctx.fill();"
+              "});"
+              "if(aircraft&&aircraft.length){"
+                "ctx.fillStyle='#00cc00';ctx.font='bold 12px monospace';"
+                "ctx.textAlign='left';ctx.fillText(aircraft.length+' AC',6,16);"
+              "}"
+            "}"
+            "draw(null);"
+            "fetch('/aircraft').then(function(r){return r.json();})"
+            ".then(function(d){draw(d.aircraft);})"
+            ".catch(function(){});"
+            "window._radarBlipsTimer=setTimeout(function(){"
+              "var el=document.getElementById('radarBc');if(el)startRadarBlips(el);"
+            "},5000);"
           "}"
           "function clearSummary(){"
             "showConfirm("
@@ -559,7 +617,7 @@ void WebUI::handleRoot() {
           "</script>"
           "</head><body>"
           "<button id='dmBtn' onclick='toggleDark()' title='Toggle dark mode'><i class='fa-solid fa-moon'></i></button>"
-          "<h2><i class='fa-solid fa-plane' style='margin-right:8px'></i>PlaneTracker Setup</h2>"
+          "<h2><i class='fa-solid fa-plane' style='margin-right:8px'></i>PlaneTracker</h2>"
           "<div class='layout'>"
           "<div class='form-col'>"
           "<form method='POST' action='/save'>");
@@ -734,6 +792,7 @@ void WebUI::handleRoot() {
             "<button class='cb' data-s='scan'    onclick='ctrl(\"scan\")'><i class='fa-solid fa-satellite-dish'></i><br>Scan</button>"
             "<button class='cb' data-s='history' onclick='ctrl(\"history\")'><i class='fa-solid fa-clock-rotate-left'></i><br>History</button>"
             "<button class='cb' data-s='summary' onclick='ctrl(\"summary\")'><i class='fa-solid fa-chart-bar'></i><br>Summary</button>"
+            "<button class='cb' data-s='radar'   onclick='ctrl(\"radar\")'><i class='fa-solid fa-circle-dot'></i><br>Radar</button>"
             "<button class='cb' data-s='debug'   onclick='ctrl(\"debug\")'><i class='fa-solid fa-bug'></i><br>Debug</button>"
             "</div>"
             "<div style='margin-top:6px'>"
@@ -913,21 +972,18 @@ void WebUI::handleSave() {
 }
 
 void WebUI::handleControl() {
-    if (_server.hasArg("screen") && _screenMode) {
-        String s = _server.arg("screen");
-        if (s == "history") {
-            if (*_screenMode == ScreenMode::History && _store.historyCount() > 0) {
-                // Already on history - page to the next entry, wrapping at the end
-                int next = _store.historyIndex() + 1;
-                _store.setHistoryIndex(next < _store.historyCount() ? next : 0);
-            } else {
-                *_screenMode = ScreenMode::History;
-                _store.setHistoryIndex(0);
-            }
-        } else if (s == "scan")    *_screenMode = ScreenMode::Scanning;
-        else if (s == "summary") *_screenMode = ScreenMode::Summary;
-        else if (s == "debug")   *_screenMode = ScreenMode::Debug;
-        _controlChanged = true;
+    if (!_server.hasArg("screen")) { _server.send(200, "text/plain", "OK"); return; }
+
+    String name = _server.arg("screen");
+    if (name == "history" && _screenController.current() == ScreenMode::History
+                          && _store.historyCount() > 0) {
+        // Already on History — page to the next entry, wrapping at the end.
+        int next = _store.historyIndex() + 1;
+        _store.setHistoryIndex(next < _store.historyCount() ? next : 0);
+        _screenController.markChanged();
+    } else {
+        if (name == "history") _store.setHistoryIndex(0);
+        _screenController.setModeFromString(name);
     }
     _server.send(200, "text/plain", "OK");
 }
@@ -1025,69 +1081,14 @@ void WebUI::handleNtfyStats() {
     _server.send(200, "application/json", String(buf));
 }
 
-String WebUI::buildRebootPage(const String& heading, const String& subtext) {
-    return String(
-        "<!DOCTYPE html><html><head><title>PlaneTracker</title>"
-        "<style>"
-        "body{font-family:sans-serif;text-align:center;margin-top:60px;background:#fff;color:#222;transition:background .2s,color .2s}"
-        "body.dark{background:#1a1a1a;color:#e0e0e0}"
-        "p{color:#666}"
-        "body.dark p{color:#aaa}"
-        "#wifi-warn{display:none;margin:24px auto;max-width:380px;padding:14px 18px;"
-        "background:#FFF8E1;border:1px solid #FFB300;border-radius:6px;"
-        "color:#5D4037;font-size:.9em;text-align:left;line-height:1.5}"
-        "body.dark #wifi-warn{background:#2d2500;border-color:#6d5800;color:#e0c84a}"
-        "</style>"
-        "<script>"
-        "function poll(){"
-          "fetch('/').then(function(r){"
-            "if(r.ok)window.location.href='/';"
-            "else setTimeout(poll,1000);"
-          "}).catch(function(){setTimeout(poll,1000);});"
-        "}"
-        "setTimeout(poll,4000);"
-        "setTimeout(function(){document.getElementById('wifi-warn').style.display='block';},30000);"
-        "(function(){"
-          "var s=localStorage.getItem('pt-dark');"
-          "var sys=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;"
-          "if(s!==null?s==='1':sys)document.documentElement.classList.add('dark-pending');"
-        "})();"
-        "document.addEventListener('DOMContentLoaded',function(){"
-          "var s=localStorage.getItem('pt-dark');"
-          "var sys=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;"
-          "if(s!==null?s==='1':sys)document.body.classList.add('dark');"
-        "});"
-        "</script>"
-        "</head><body>"
-        "<h2>") + heading + String("</h2>"
-        "<p>") + subtext + String("</p>"
-        "<p>Returning to settings when back online.</p>"
-        "<div id='wifi-warn'>"
-        "<strong>Taking too long?</strong><br>"
-        "If you changed the WiFi network or password, the device may have started "
-        "its own setup hotspot instead. Connect to the <strong>PlaneTracker</strong> "
-        "WiFi network and open <strong>192.168.4.1</strong> to reconfigure."
-        "</div>"
-        "</body></html>");
-}
-
-// Converts a uint16_t RGB565 color to a CSS hex string
-String WebUI::rgb565ToCss(uint16_t c) {
-    uint8_t r = ((c >> 11) & 0x1F) * 255 / 31;
-    uint8_t g = ((c >> 5)  & 0x3F) * 255 / 63;
-    uint8_t b = (c & 0x1F) * 255 / 31;
-    char buf[8];
-    snprintf(buf, sizeof(buf), "#%02X%02X%02X", r, g, b);
-    return String(buf);
-}
 
 String WebUI::buildScreenDiv() {
-    ScreenMode mode = _screenMode ? *_screenMode : ScreenMode::Scanning;
+    ScreenMode mode = _screenController.current();
     String bg = "#000000", fg = "#FFFFFF", inner = "";
 
     auto buildAcInner = [&](const Aircraft& ac, bool hist, int histIdx, int histTotal) {
-        bg = rgb565ToCss(_display.backgroundColorFor(ac.classification));
-        fg = rgb565ToCss(_display.foregroundColorFor(ac.classification));
+        bg = Display::rgb565ToCss(_display.backgroundColorFor(ac.classification));
+        fg = Display::rgb565ToCss(_display.foregroundColorFor(ac.classification));
 
         String cs = ac.callsign.length() ? ac.callsign : "N/A";
         if (cs.length() > 10) cs = cs.substring(0, 10);
@@ -1188,8 +1189,13 @@ String WebUI::buildScreenDiv() {
         snprintf(buf, sizeof(buf), "<div>MED:   %3d</div>", _store.detectionCount(AircraftClass::Medevac));    inner += buf;
         snprintf(buf, sizeof(buf), "<div>COMM:  %3d</div>", _store.detectionCount(AircraftClass::Commercial)); inner += buf;
         snprintf(buf, sizeof(buf), "<div>PRIV:  %3d</div>", _store.detectionCount(AircraftClass::Private));    inner += buf;
+    } else if (mode == ScreenMode::Radar) {
+        inner = "<canvas id='radarBc' width='256' height='256' "
+                "style='position:absolute;top:0;left:0;width:100%;height:100%'></canvas>";
     } else if (mode == ScreenMode::Debug) {
         const std::vector<String>& lines = _store.apiResponseLines();
+        // Wrap text content in a height-limited div so it never bleeds into the bar zone
+        inner += "<div style='overflow:hidden;height:216px'>";
         inner += "<div>DBG HTTP:" + String(_store.lastResponseCode()) +
                  " ac:" + String(_store.lastAircraftCount()) + "</div>";
         inner += "<div>IP: " + _ipAddress + "</div>";
@@ -1201,12 +1207,36 @@ String WebUI::buildScreenDiv() {
             inner += "<div>" + String(upBuf) + "</div>";
         }
         inner += "<div>VER: " + String(OtaUpdater::currentVersion()) + "</div>";
-        int shown = min((int)lines.size(), 12);
+        int shown = min((int)lines.size(), 10);
         for (int i = 0; i < shown; i++) {
             String line = lines[i];
             if (line.length() > 21) line = line.substring(0, 21);
             inner += "<div>" + line + "</div>";
         }
+        inner += "</div>"; // end height-limited content wrapper
+        // System bars pinned to bottom of debug screen
+        auto sysBar = [](const char* label, float used, const char* pct, int bottomPx) -> String {
+            const char* col = used > 0.75f ? "#cc0000"
+                            : used > 0.50f ? "#b8a800"
+                            :                "#00aa00";
+            return String("<div style='position:absolute;bottom:") + bottomPx +
+                   "px;left:6px;right:6px;display:flex;align-items:center;gap:3px;font-size:10px'>"
+                   "<span style='color:#00cc00;width:26px'>" + label + "</span>"
+                   "<div style='flex:1;height:4px;background:#282828;border-radius:2px'>"
+                   "<div style='width:" + (int)(used * 100) + "%;height:4px;background:" + col + ";border-radius:2px'></div>"
+                   "</div>"
+                   "<span style='color:#00cc00;width:28px;text-align:right'>" + pct + "</span>"
+                   "</div>";
+        };
+        uint32_t freeH = ESP.getFreeHeap(), totH = ESP.getHeapSize();
+        float ramU = 1.0f - (float)freeH / (float)totH;
+        char ramP[5]; snprintf(ramP, sizeof(ramP), "%d%%", (int)(ramU * 100));
+        inner += sysBar("RAM", ramU, ramP, 14);
+
+        uint32_t stkFree = uxTaskGetStackHighWaterMark(NULL) * 4;
+        float stkU = max(0.0f, 1.0f - (float)stkFree / (24.0f * 1024));
+        char stkP[5]; snprintf(stkP, sizeof(stkP), "%d%%", (int)(stkU * 100));
+        inner += sysBar("STK", stkU, stkP, 2);
     }
 
     String html = "<div id='scr' style='background:" + bg + ";color:" + fg + ";"
@@ -1247,8 +1277,8 @@ String WebUI::buildScreenDiv() {
                 case AircraftClass::Commercial: catLetter = "C"; break;
                 default:                        catLetter = "P"; break;
             }
-            String catBg  = rgb565ToCss(_display.backgroundColorFor(ac.classification));
-            String catFg  = rgb565ToCss(_display.foregroundColorFor(ac.classification));
+            String catBg  = Display::rgb565ToCss(_display.backgroundColorFor(ac.classification));
+            String catFg  = Display::rgb565ToCss(_display.foregroundColorFor(ac.classification));
 
             html += "<tr style='border-bottom:1px solid #333'>"
                     "<td style='text-align:center;padding:2px 4px'>"
@@ -1324,38 +1354,7 @@ void WebUI::handleOtaUpdate() {
 }
 
 void WebUI::handleAircraft() {
-    auto esc = [](const String& s) -> String {
-        String r = s; r.replace("\"", "'"); return r;
-    };
-    String json = "{\"aircraft\":[";
-    bool first = true;
-    for (const auto& kv : _store.activeAircraft()) {
-        const Aircraft& ac = kv.second;
-        if (!first) json += ",";
-        first = false;
-        String bg = rgb565ToCss(_display.backgroundColorFor(ac.classification));
-        String fg = rgb565ToCss(_display.foregroundColorFor(ac.classification));
-        String cs = ac.callsign.length() ? ac.callsign
-                  : ac.registration.length() ? ac.registration : ac.icao;
-        float dist = ac.distanceNm(_cfg.latitude, _cfg.longitude);
-        const char* compass = Aircraft::compassPoint(ac.bearingDeg(_cfg.latitude, _cfg.longitude));
-        bool inbound = ac.isApproaching(_cfg.latitude, _cfg.longitude);
-        char buf[320];
-        snprintf(buf, sizeof(buf),
-            "{\"icao\":\"%s\",\"callsign\":\"%s\",\"type\":\"%s\","
-            "\"lat\":%.6f,\"lon\":%.6f,\"alt\":%.0f,\"track\":%.0f,\"speed\":%.0f,"
-            "\"sqwk\":\"%s\",\"bg\":\"%s\",\"fg\":\"%s\","
-            "\"dist\":\"%.1f\",\"compass\":\"%s\",\"inbound\":%s}",
-            esc(ac.icao).c_str(), esc(cs).c_str(), esc(ac.type).c_str(),
-            ac.latitude, ac.longitude, ac.altitude, ac.trackDegrees, ac.groundSpeed,
-            esc(ac.squawk).c_str(), bg.c_str(), fg.c_str(),
-            dist, compass, inbound ? "true" : "false");
-        json += buf;
-    }
-    json += "],\"center\":{\"lat\":" + String(_cfg.latitude,  6)
-          + ",\"lon\":"              + String(_cfg.longitude, 6) + "}"
-          + ",\"radiusM\":"          + String((int)(_cfg.radius * 1852.0f)) + "}";
-    _server.send(200, "application/json", json);
+    _server.send(200, "application/json", _api.serializeActiveAircraft());
 }
 
 void WebUI::handleClearSummary() {
@@ -1364,28 +1363,6 @@ void WebUI::handleClearSummary() {
 }
 
 void WebUI::handleHistory() {
-    auto esc = [](const String& s) -> String {
-        String r = s; r.replace("\"", "'"); return r;
-    };
-    String json = "{\"aircraft\":[";
-    for (int i = 0; i < _store.webHistoryCount(); i++) {
-        const Aircraft& ac = _store.historyAt(i);
-        if (i > 0) json += ",";
-        String bg = rgb565ToCss(_display.backgroundColorFor(ac.classification));
-        String fg = rgb565ToCss(_display.foregroundColorFor(ac.classification));
-        String cs = ac.callsign.length() ? ac.callsign
-                  : ac.registration.length() ? ac.registration : ac.icao;
-        String trackUrl = "https://globe.adsbexchange.com/?icao=" + ac.icao;
-        char buf[320];
-        snprintf(buf, sizeof(buf),
-            "{\"callsign\":\"%s\",\"type\":\"%s\",\"alt\":%.0f,\"speed\":%.0f,"
-            "\"sqwk\":\"%s\",\"cls\":\"%s\",\"bg\":\"%s\",\"fg\":\"%s\",\"url\":\"%s\"}",
-            esc(cs).c_str(), esc(ac.type).c_str(), ac.altitude, ac.groundSpeed,
-            esc(ac.squawk).c_str(), aircraftClassName(ac.classification),
-            bg.c_str(), fg.c_str(), trackUrl.c_str());
-        json += buf;
-    }
-    json += "]}";
-    _server.send(200, "application/json", json);
+    _server.send(200, "application/json", _api.serializeHistory());
 }
 

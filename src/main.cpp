@@ -1,37 +1,39 @@
-﻿#include <M5Unified.h>
+#include <M5Unified.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include "AppState.h"
 #include "Aircraft.h"
+#include "AircraftJsonApi.h"
+#include "AircraftPersistence.h"
+#include "AircraftStore.h"
+#include "AdsbLolSource.h"
 #include "Config.h"
 #include "Display.h"
+#include "FetchEffect.h"
 #include "Notifier.h"
-#include "AircraftStore.h"
 #include "OtaUpdater.h"
+#include "ScreenController.h"
 #include "WebUI.h"
 #include "secrets.h"
 #include <esp_ota_ops.h>
 
-// ── Global instances ──────────────────────────────────────────────────────────
+// ── Global instances (declared in dependency order) ───────────────────────────
 
-static Config        config;
-static Display       display;
-static Notifier      notifier;
-static AircraftStore store;
-static OtaUpdater    ota;
-static WebUI         webUI(config, store, display, ota);
-static ScreenMode    mode             = ScreenMode::Scanning;
-static ScreenMode    preDebug         = ScreenMode::Scanning;
-static int           debugScrollOffset = 0;
+static Config              config;
+static AircraftPersistence persistence;
+static AdsbLolSource       adsbSource;
+static AircraftStore       store(adsbSource, persistence);
+static Display             display;
+static Notifier            notifier;
+static OtaUpdater          ota;
+static ScreenController    screenController;
+static AircraftJsonApi     api(store, config, display);
+static WebUI               webUI(config, store, display, ota, api, screenController);
 
-// Button state
+// Button timing state
 static uint32_t lastInteractionTime = 0;
 static uint32_t buttonPressTime     = 0;
 static bool     longPressHandled    = false;
-static uint32_t lastClickTime       = 0;
 static constexpr uint32_t kIdleTimeoutMs       = 30000;
 static constexpr uint32_t kLongPressDurationMs = 800;
-static constexpr uint32_t kDoubleClickWindowMs = 400;
 
 // ── WiFi ──────────────────────────────────────────────────────────────────────
 
@@ -39,14 +41,14 @@ static bool connectToWifi() {
     WiFi.mode(WIFI_STA);
     WiFi.begin(config.ssid, config.password);
 
-    for (int frame = 0; frame < 80 && WiFi.status() != WL_CONNECTED; frame++)  {
+    for (int frame = 0; frame < 80 && WiFi.status() != WL_CONNECTED; frame++) {
         display.showSplash(frame);
         delay(250);
     }
 
     if (WiFi.status() == WL_CONNECTED) {
         webUI.setIPAddress(WiFi.localIP().toString());
-        webUI.begin(mode, false);
+        webUI.begin(false);
         return true;
     }
     return false;
@@ -79,7 +81,6 @@ static void validatePollInterval() {
         delay(50);
     }
 
-    // Timeout - correct in memory and continue without rebooting
     config.pollIntervalMs = Config::kMinPollIntervalMs;
 }
 
@@ -87,13 +88,13 @@ static void validatePollInterval() {
 
 static void render() {
     display.setUpdateAvailable(ota.hasUpdate());
-    switch (mode) {
+    switch (screenController.current()) {
         case ScreenMode::Scanning:
             if (store.hasActiveAircraft()) {
                 const Aircraft* ac = store.currentAircraft();
                 if (ac) {
                     int eta = ac->etaSeconds(config.latitude, config.longitude, config.radius);
-                    display.showAircraft(*ac, false, 0, 0, eta, config.latitude, config.longitude);
+                    display.showLiveAircraft(*ac, eta, config.latitude, config.longitude);
                 }
             } else if (store.consecutiveFailures() > 0) {
                 display.showLostConnection(store.consecutiveFailures());
@@ -103,12 +104,10 @@ static void render() {
             break;
         case ScreenMode::History:
             if (store.historyCount() > 0)
-                display.showAircraft(store.historyAt(store.historyIndex()),
-                                     true,
-                                     store.historyIndex(),
-                                     store.historyCount(),
-                                     -1,
-                                     config.latitude, config.longitude);
+                display.showHistoryAircraft(store.historyAt(store.historyIndex()),
+                                            store.historyIndex(),
+                                            store.historyCount(),
+                                            config.latitude, config.longitude);
             else
                 display.showScanning();
             break;
@@ -118,13 +117,107 @@ static void render() {
                                 store.detectionCount(AircraftClass::Commercial),
                                 store.detectionCount(AircraftClass::Private));
             break;
+        case ScreenMode::Radar:
+            display.showRadar(store.activeAircraft(),
+                              config.latitude, config.longitude, config.radius);
+            break;
         case ScreenMode::Debug:
-            display.showDebug(store.apiResponseLines(), debugScrollOffset,
-                              store.lastResponseCode(), store.lastAircraftCount(),
-                              webUI.ipAddress(), millis() / 1000,
-                              OtaUpdater::currentVersion());
+            display.showDebug(store.apiResponseLines(), screenController.debugScrollOffset(), {
+                store.lastResponseCode(),
+                store.lastAircraftCount(),
+                webUI.ipAddress(),
+                millis() / 1000,
+                OtaUpdater::currentVersion()
+            });
             break;
     }
+}
+
+// ── Loop helpers ──────────────────────────────────────────────────────────────
+
+static void handleWebControlChange() {
+    if (!screenController.consumeWebControlChange()) return;
+    lastInteractionTime = millis();
+    render();
+}
+
+static void handleIdleTimeout() {
+    ScreenMode mode = screenController.current();
+    bool isIdleableMode = (mode == ScreenMode::History || mode == ScreenMode::Summary);
+    if (!isIdleableMode) return;
+    if (millis() - lastInteractionTime < kIdleTimeoutMs) return;
+    screenController.setMode(ScreenMode::Scanning);
+    render();
+}
+
+static void handleDebugShortPress() {
+    int totalLines = (int)store.apiResponseLines().size();
+    if (screenController.handleDebugShortPress(totalLines, Display::kVisibleLineCount))
+        notifier.sendTestNotification(config, display);
+    render();
+}
+
+static void handleNormalShortPress() {
+    if (screenController.handleShortPress(store)) store.clearCounts();
+    render();
+}
+
+static void handleButtonInput() {
+    if (M5.BtnA.wasPressed()) {
+        buttonPressTime     = millis();
+        longPressHandled    = false;
+        lastInteractionTime = millis();
+    }
+
+    if (M5.BtnA.isPressed() && !longPressHandled &&
+        (millis() - buttonPressTime >= kLongPressDurationMs)) {
+        longPressHandled = true;
+        screenController.toggleDebug();
+        render();
+        return;
+    }
+
+    if (!M5.BtnA.wasReleased() || longPressHandled) return;
+
+    lastInteractionTime = millis();
+    if (screenController.isDebugMode())
+        handleDebugShortPress();
+    else
+        handleNormalShortPress();
+}
+
+static void handleAutoRefresh() {
+    static uint32_t lastEtaRedraw   = 0;
+    static uint32_t lastScanRefresh = 0;
+
+    if (screenController.current() == ScreenMode::Scanning && store.hasActiveAircraft()) {
+        if (store.activeAircraftCount() > 1 &&
+            millis() - store.lastCycleTime() >= AircraftStore::kCycleIntervalMs) {
+            store.cycleToNextAircraft();
+            render();
+            lastEtaRedraw = millis();
+        } else if (millis() - lastEtaRedraw >= 1000) {
+            lastEtaRedraw = millis();
+            render();
+        }
+    }
+
+    if (screenController.current() == ScreenMode::Scanning && !store.hasActiveAircraft() &&
+        store.consecutiveFailures() == 0 &&
+        millis() - lastScanRefresh >= 50) {
+        lastScanRefresh = millis();
+        display.showScanning();
+    }
+}
+
+static void handlePoll() {
+    static uint32_t lastPoll = 0;
+    if (millis() - lastPoll < config.pollIntervalMs) return;
+    lastPoll = millis();
+    FetchEffect effect = store.fetch(config, notifier);
+    if (effect == FetchEffect::NewAircraftDetected)
+        screenController.onNewAircraftDetected();
+    render();
 }
 
 // ── Entry points ──────────────────────────────────────────────────────────────
@@ -146,21 +239,23 @@ void setup() {
     display.begin();
     config.load();
     store.loadCountsFromNVS();
+    store.loadHistoryFromNVS();
     validatePollInterval();
 
     if (config.isUnconfigured() || !connectToWifi()) {
-        webUI.begin(mode, true);   // AP mode: starts SoftAP + web server
+        webUI.begin(true);   // AP mode: starts SoftAP + web server
         display.showSetupMode();
         return;  // loop() handles AP from here
     }
 
     display.showScanning();
-    store.fetch(config, notifier, mode);
+    FetchEffect effect = store.fetch(config, notifier);
+    if (effect == FetchEffect::NewAircraftDetected)
+        screenController.onNewAircraftDetected();
     render();
 }
 
 void loop() {
-    // AP mode: serve web requests only
     if (webUI.isInSetupMode()) {
         webUI.processRequests();
         return;
@@ -169,119 +264,14 @@ void loop() {
     M5.update();
     webUI.processRequests();
 
-    // Web UI control button changed the screen mode - update the physical display immediately
-    if (webUI.consumeControlChange()) {
-        debugScrollOffset = 0;
-        lastInteractionTime = millis();
-        render();
-    }
+    handleWebControlChange();
+    handleIdleTimeout();
+    handleButtonInput();
+    if (screenController.update(millis())) render();
+    handleAutoRefresh();
+    handlePoll();
 
-    // Idle timeout - return to Scanning after 30s of no interaction on History/Summary
-    if ((mode == ScreenMode::History || mode == ScreenMode::Summary) &&
-        millis() - lastInteractionTime >= kIdleTimeoutMs) {
-        mode = ScreenMode::Scanning;
-        render();
-    }
-
-    // Long-press detection
-    if (M5.BtnA.wasPressed()) {
-        buttonPressTime     = millis();
-        longPressHandled    = false;
-        lastInteractionTime = millis();
-    }
-    if (M5.BtnA.isPressed() && !longPressHandled &&
-        (millis() - buttonPressTime >= kLongPressDurationMs)) {
-        longPressHandled = true;
-        if (mode == ScreenMode::Debug) {
-            mode = preDebug;          // exit debug, restore previous screen
-        } else {
-            preDebug         = mode;  // remember where we came from
-            debugScrollOffset = 0;
-            mode             = ScreenMode::Debug;
-        }
-        render();
-    }
-    if (M5.BtnA.wasReleased() && !longPressHandled) {
-        lastInteractionTime = millis();
-        // Short press: scroll in debug, or cycle screens
-        if (mode == ScreenMode::Debug) {
-            uint32_t now = millis();
-            if (now - lastClickTime <= kDoubleClickWindowMs) {
-                lastClickTime = 0;  // reset so triple-click doesn't re-trigger
-                notifier.sendTestNotification(config, display);
-                render();
-            } else {
-                lastClickTime = now;
-                int maxScroll = (int)store.apiResponseLines().size() - Display::kVisibleLineCount;
-                if (maxScroll < 0) maxScroll = 0;
-                debugScrollOffset = (debugScrollOffset >= maxScroll) ? 0 : debugScrollOffset + Display::kVisibleLineCount;
-                render();
-            }
-        } else {
-            switch (mode) {
-                case ScreenMode::Scanning:
-                    mode = (store.historyCount() > 0) ? ScreenMode::History : ScreenMode::Summary;
-                    break;
-                case ScreenMode::History:
-                    if (store.historyIndex() < store.historyCount() - 1) {
-                        store.setHistoryIndex(store.historyIndex() + 1);  // show next older entry
-                    } else {
-                        store.setHistoryIndex(0);  // reset for next visit
-                        mode = ScreenMode::Summary;
-                    }
-                    break;
-                case ScreenMode::Summary: {
-                    uint32_t now = millis();
-                    if (now - lastClickTime <= kDoubleClickWindowMs) {
-                        lastClickTime = 0;
-                        store.clearCounts();
-                    } else {
-                        lastClickTime = now;
-                        mode = ScreenMode::Scanning;
-                    }
-                    break;
-                }
-                default: break;
-            }
-            render();
-        }
-    }
-
-    // Auto-cycle between multiple overhead aircraft every 5 seconds;
-    // also redraw every second while live to keep ETA countdown fresh
-    static uint32_t lastEtaRedraw = 0;
-    if (mode == ScreenMode::Scanning && store.hasActiveAircraft()) {
-        if (store.activeAircraftCount() > 1 &&
-            millis() - store.lastCycleTime() >= AircraftStore::kCycleIntervalMs) {
-            store.cycleToNextAircraft();
-            render();
-            lastEtaRedraw = millis();
-        } else if (millis() - lastEtaRedraw >= 1000) {
-            lastEtaRedraw = millis();
-            render();
-        }
-    }
-
-    // Animate the scanning screen at ~20 fps when idle (skip if connection lost)
-    static uint32_t lastScanRefresh = 0;
-    if (mode == ScreenMode::Scanning && !store.hasActiveAircraft() &&
-        store.consecutiveFailures() == 0 &&
-        millis() - lastScanRefresh >= 50) {
-        lastScanRefresh = millis();
-        display.showScanning();
-    }
-
-    static uint32_t lastPoll = 0;
-    if (millis() - lastPoll >= config.pollIntervalMs) {
-        lastPoll = millis();
-        store.fetch(config, notifier, mode);
-        render();
-    }
-
-    // Daily OTA update check - notifies via ntfy if an update is found
     if (!webUI.isInSetupMode() && ota.isDue()) {
-        if (ota.check()) {
-            notifier.notifyUpdate(ota.latestVersion(), config);
-        }
+        if (ota.check()) notifier.notifyUpdate(ota.latestVersion(), config);
     }
 }
