@@ -480,13 +480,27 @@ void WebUI::handleRoot() {
               "function(){"
                 "document.getElementById('otaUpdateBtn').disabled=true;"
                 "document.getElementById('otaModalVersion').textContent=ver;"
+                "document.getElementById('otaProgress').style.display='';"
+                "document.getElementById('otaSuccess').style.display='none';"
+                "document.getElementById('otaError').style.display='none';"
                 "document.getElementById('otaModal').classList.add('open');"
                 "fetch('/ota-update',{method:'POST'})"
-                ".then(function(r){return r.text();})"
-                ".then(function(t){document.open();document.write(t);document.close();})"
+                ".then(function(r){return r.json();})"
+                ".then(function(d){"
+                  "document.getElementById('otaProgress').style.display='none';"
+                  "if(d.ok){"
+                    "document.getElementById('otaSuccess').style.display='';"
+                    "pollReconnect(null);"
+                  "}else{"
+                    "document.getElementById('otaError').style.display='';"
+                    "document.getElementById('otaErrMsg').textContent=d.msg||'Unknown error';"
+                    "document.getElementById('otaUpdateBtn').disabled=false;"
+                  "}"
+                "})"
                 ".catch(function(e){"
-                  "document.getElementById('otaModal').classList.remove('open');"
-                  "document.getElementById('otaStatus').textContent='Request failed: '+e;"
+                  "document.getElementById('otaProgress').style.display='none';"
+                  "document.getElementById('otaError').style.display='';"
+                  "document.getElementById('otaErrMsg').textContent='Request failed: '+e;"
                   "document.getElementById('otaUpdateBtn').disabled=false;"
                 "});"
               "}"
@@ -744,16 +758,36 @@ void WebUI::handleRoot() {
             "</div>"
             "</div>"; // end preview-col
 
-    // OTA update progress modal - no close button, cannot be dismissed
+    // OTA update modal - progress / success / error states
     html += "<div class='modal' id='otaModal' style='z-index:2000'>"
             "<div class='modal-box'>"
+            // progress state
+            "<div id='otaProgress'>"
             "<div style='font-size:2.5em;margin-bottom:12px;color:#1976D2'><i class='fa-solid fa-arrows-rotate fa-spin'></i></div>"
             "<div style='font-size:1.1em;font-weight:700;margin-bottom:8px'>Updating Firmware</div>"
             "<div id='otaModalVersion' style='font-family:monospace;font-size:.9em;margin-bottom:16px'></div>"
             "<div style='color:#c00;font-weight:600;margin-bottom:6px'>"
             "<i class='fa-solid fa-triangle-exclamation' style='margin-right:5px'></i>"
             "Do not unplug the device</div>"
-            "<div class='modal-hint'>The device will reboot automatically when complete.</div>"
+            "<div class='modal-hint'>This takes about 30 seconds.</div>"
+            "</div>"
+            // success state
+            "<div id='otaSuccess' style='display:none'>"
+            "<div style='font-size:2.5em;margin-bottom:12px;color:#388E3C'><i class='fa-solid fa-circle-check'></i></div>"
+            "<div style='font-size:1.1em;font-weight:700;margin-bottom:8px'>Update Complete</div>"
+            "<div class='modal-hint'>Rebooting&hellip; returning to settings when back online.</div>"
+            "<div style='color:#c00;font-weight:600;margin-bottom:6px'>"
+            "<i class='fa-solid fa-triangle-exclamation' style='margin-right:5px'></i>"
+            "Do not unplug the device</div>"
+            "</div>"
+            // error state
+            "<div id='otaError' style='display:none'>"
+            "<div style='font-size:2.5em;margin-bottom:12px;color:#D32F2F'><i class='fa-solid fa-circle-xmark'></i></div>"
+            "<div style='font-size:1.1em;font-weight:700;margin-bottom:8px'>Update Failed</div>"
+            "<div id='otaErrMsg' class='modal-hint' style='margin-bottom:20px'></div>"
+            "<button onclick=\"document.getElementById('otaModal').classList.remove('open')\" "
+            "class='modal-cancel' style='width:100%'>Dismiss</button>"
+            "</div>"
             "</div>"
             "</div>";
 
@@ -1283,14 +1317,13 @@ void WebUI::handleOtaUpdate() {
     // Block here while downloading and flashing (~30-60 s).
     // The browser holds the connection open and receives the result when done.
     if (_ota.apply()) {
-        _server.send(200, "text/html",
-                     buildRebootPage("Update Successful",
-                                     "Rebooting to " + _ota.latestVersion() + "&hellip;"));
+        _server.send(200, "application/json", "{\"ok\":true}");
         delay(500);
         ESP.restart();
     } else {
-        _server.send(200, "text/html",
-                     buildRebootPage("Update Failed", _ota.statusMessage()));
+        String msg = _ota.statusMessage();
+        msg.replace("\"", "'");
+        _server.send(200, "application/json", "{\"ok\":false,\"msg\":\"" + msg + "\"}");
     }
 }
 
