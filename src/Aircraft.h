@@ -14,6 +14,7 @@ struct Aircraft {
     String   registration;  // tail number (aircraft identifier)
     String   type;
     String   owner;
+    String   squawk;
     float    altitude;
     float    latitude;
     float    longitude;
@@ -21,6 +22,11 @@ struct Aircraft {
     float    trackDegrees;     // true track, degrees
     uint32_t positionTimestamp; // millis() when lat/lon/gs/track were last updated
     AircraftClass classification;
+
+    static bool isEmergencySquawkCode(const String& sq) {
+        return sq == "7500" || sq == "7600" || sq == "7700";
+    }
+    bool isEmergencySquawk() const { return isEmergencySquawkCode(squawk); }
 
     // Returns the AircraftClass for the given aircraft attributes
     static AircraftClass classify(const String& callsign, const String& owner,

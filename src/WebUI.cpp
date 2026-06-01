@@ -124,6 +124,8 @@ void WebUI::handleRoot() {
           "padding:10px;border-radius:4px;height:320px;overflow-y:auto;"
           "white-space:pre-wrap;word-break:break-all;margin-top:10px;"
           "border:1px solid #333}"
+          "@keyframes sqwkFlash{0%,100%{color:#ff0000;background:transparent}50%{color:#fff;background:#ff0000}}"
+          ".sqwk-emrg{animation:sqwkFlash 0.6s infinite;font-weight:bold;border-radius:2px;padding:0 2px}"
           "#liveWrap:fullscreen{background:#000;display:flex;flex-direction:column;"
           "align-items:center;justify-content:center;gap:12px}"
           "#liveWrap:fullscreen #scr{width:min(80vh,80vw)!important;height:min(80vh,80vw)!important;"
@@ -138,10 +140,14 @@ void WebUI::handleRoot() {
           "function startRadar(c){"
             "if(window._radarRaf){cancelAnimationFrame(window._radarRaf);window._radarRaf=null;}"
             "var ctx=c.getContext('2d');"
-            "var cx=128,cy=100,oR=70,iR=36,N=36,fr=0;"
+            "var w=c.width,h=c.height,cx=w/2;"
+            "var oR=70,iR=36,N=36,fr=0;"
+            "var gap=14,textH=12;"
+            "var cy=(h-(2*oR+gap+textH))/2+oR;"
+            "var textY=cy+oR+gap+textH;"
             "var trail=['#003200','#008200','#00d200','#00ff00'];"
             "function draw(){"
-              "ctx.fillStyle='#000';ctx.fillRect(0,0,256,256);"
+              "ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);"
               "ctx.lineWidth=1;"
               "ctx.strokeStyle='#00ff00';ctx.beginPath();"
               "ctx.arc(cx,cy,oR,0,Math.PI*2);ctx.stroke();"
@@ -156,7 +162,7 @@ void WebUI::handleRoot() {
               "}"
               "ctx.fillStyle='#00ff00';ctx.font='bold 12px monospace';"
               "var tw=ctx.measureText('SCANNING').width;"
-              "ctx.fillText('SCANNING',(256-tw)/2,200);"
+              "ctx.fillText('SCANNING',(w-tw)/2,textY);"
               "fr+=0.25;window._radarRaf=requestAnimationFrame(draw);"
             "}"
             "draw();"
@@ -285,18 +291,10 @@ void WebUI::handleRoot() {
             "if(id==='notify')loadNtfyStats(null);"
             "if(id==='update')checkOta();"
           "}"
-          "function toggleCats(){"
-            "document.getElementById('catDrop').classList.toggle('open');"
-          "}"
           "function updateCats(){"
-            "var checked=Array.from(document.querySelectorAll('#catDrop input:checked'));"
+            "var checked=Array.from(document.querySelectorAll('#catList input[data-label]:checked'));"
             "document.getElementById('ntfyClasses').value=checked.map(function(c){return c.value;}).join(',');"
-            "var lbl=checked.length?checked.map(function(c){return c.dataset.label;}).join(', '):'All categories';"
-            "document.getElementById('catBtn').innerHTML=lbl+'&nbsp;<i class=\"fa-solid fa-chevron-down\" style=\"font-size:.75em\"></i>';"
           "}"
-          "document.addEventListener('click',function(e){"
-            "if(!e.target.closest('#catWrap'))document.getElementById('catDrop').classList.remove('open');"
-          "});"
           "document.addEventListener('DOMContentLoaded',function(){"
             "showTab(localStorage.getItem('pt-tab')||'wifi');"
             "updateCats();"
@@ -428,21 +426,18 @@ void WebUI::handleRoot() {
         String commChk = (hasFilter && strstr(f, "COMM"))   ? " checked" : "";
         String privChk = (hasFilter && strstr(f, "PRIV"))   ? " checked" : "";
 
-        String updChk = _cfg.notifyUpdates ? " checked" : "";
+        String updChk   = _cfg.notifyUpdates         ? " checked" : "";
+        String emergChk = _cfg.notifyEmergencySquawk  ? " checked" : "";
         html += "<label>ntfy Notification Categories</label>"
-                "<div class='chk-wrap' id='catWrap'>"
-                "<button type='button' class='chk-btn' id='catBtn' onclick='toggleCats()'>"
-                "All categories&nbsp;<i class='fa-solid fa-chevron-down' style='font-size:.75em'></i>"
-                "</button>"
-                "<div class='chk-drop' id='catDrop'>"
-                "<label class='chk-item'><input type='checkbox' value='MIL'    data-label='Military'" + milChk  + " onchange='updateCats()'> Military</label>"
-                "<label class='chk-item'><input type='checkbox' value='MEDVAC' data-label='Medevac'"  + medChk  + " onchange='updateCats()'> Medevac</label>"
-                "<label class='chk-item'><input type='checkbox' value='COMM'   data-label='Commercial'" + commChk + " onchange='updateCats()'> Commercial</label>"
-                "<label class='chk-item'><input type='checkbox' value='PRIV'   data-label='Private'"  + privChk + " onchange='updateCats()'> Private</label>"
-                "<label class='chk-item'><input type='checkbox' name='ntfyUpdates' value='1'" + updChk + "> Updates</label>"
+                "<div id='catList' style='margin-top:4px'>"
+                "<label class='chk-item'><input type='checkbox' value='MIL'    data-label='Military'"    + milChk  + " onchange='updateCats()'> Military</label>"
+                "<label class='chk-item'><input type='checkbox' value='MEDVAC' data-label='Medevac'"     + medChk  + " onchange='updateCats()'> Medevac</label>"
+                "<label class='chk-item'><input type='checkbox' value='COMM'   data-label='Commercial'"  + commChk + " onchange='updateCats()'> Commercial</label>"
+                "<label class='chk-item'><input type='checkbox' value='PRIV'   data-label='Private'"     + privChk + " onchange='updateCats()'> Private</label>"
+                "<label class='chk-item'><input type='checkbox' name='ntfyEmergSquawk' value='1'"        + emergChk + "> Emergency Squawk</label>"
+                "<label class='chk-item'><input type='checkbox' name='ntfyUpdates' value='1'"            + updChk   + "> Firmware Updates</label>"
                 "</div>"
-                "<input type='hidden' name='ntfyClasses' id='ntfyClasses' value='" + String(f) + "'>"
-                "</div>";
+                "<input type='hidden' name='ntfyClasses' id='ntfyClasses' value='" + String(f) + "'>";
     }
     html += "<button type='button' onclick='testNotify(this)' "
             "style='margin-top:10px;padding:8px 14px;background:#37474F;color:#fff;"
@@ -598,7 +593,8 @@ void WebUI::handleSave() {
         prefs.putString("ntfyTopic",   _server.arg("ntfyTopic"));
     if (_server.hasArg("ntfyClasses"))
         prefs.putString("ntfyClasses", _server.arg("ntfyClasses"));
-    prefs.putBool("ntfyUpdates", _server.hasArg("ntfyUpdates"));
+    prefs.putBool("ntfyUpdates",    _server.hasArg("ntfyUpdates"));
+    prefs.putBool("ntfyEmergSquawk", _server.hasArg("ntfyEmergSquawk"));
 
     prefs.end();
 
@@ -809,6 +805,14 @@ String WebUI::buildScreenDiv() {
             }
         }
 
+        if (ac.squawk.length() > 0) {
+            if (ac.isEmergencySquawk()) {
+                inner += "<div>SQK: <span class='sqwk-emrg'>" + ac.squawk + "</span></div>";
+            } else {
+                inner += "<div>SQK:  " + ac.squawk + "</div>";
+            }
+        }
+
         // Bottom banners
         if (hist) {
             char bar[20];
@@ -849,7 +853,7 @@ String WebUI::buildScreenDiv() {
     } else if (mode == ScreenMode::Scanning) {
         // Canvas element only - animation is started by startRadar() in the main page JS
         inner = "<canvas id='rc' width='256' height='256' "
-                "style='position:absolute;top:0;left:0'></canvas>";
+                "style='position:absolute;top:0;left:0;width:100%;height:100%'></canvas>";
     } else if (mode == ScreenMode::History) {
         if (_store.historyCount() > 0)
             buildAcInner(_store.historyAt(_store.historyIndex()),
@@ -875,6 +879,7 @@ String WebUI::buildScreenDiv() {
                      up / 3600, (up % 3600) / 60, up % 60);
             inner += "<div>" + String(upBuf) + "</div>";
         }
+        inner += "<div>VER: " + String(OtaUpdater::currentVersion()) + "</div>";
         int shown = min((int)lines.size(), 12);
         for (int i = 0; i < shown; i++) {
             String line = lines[i];
@@ -897,6 +902,7 @@ String WebUI::buildScreenDiv() {
                 "<th style='text-align:left;padding:2px 4px'>Tail</th>"
                 "<th style='text-align:left;padding:2px 4px'>Type</th>"
                 "<th style='text-align:right;padding:2px 4px'>Alt</th>"
+                "<th style='text-align:center;padding:2px 4px'>SQK</th>"
                 "<th style='text-align:right;padding:2px 4px'>ETA</th>"
                 "</tr></thead><tbody>";
 
@@ -933,6 +939,12 @@ String WebUI::buildScreenDiv() {
                     "</td>"
                     "<td style='padding:2px 4px'>" + String(ac.type.length() ? ac.type.c_str() : "?") + "</td>"
                     "<td style='text-align:right;padding:2px 4px'>" + altStr + "</td>"
+                    "<td style='text-align:center;padding:2px 4px'>" +
+                    (ac.squawk.length() ? (ac.isEmergencySquawk()
+                        ? "<span class='sqwk-emrg'>" + ac.squawk + "</span>"
+                        : ac.squawk)
+                        : String("----")) +
+                    "</td>"
                     "<td style='text-align:right;padding:2px 4px'" +
                     (eta >= 0 ? " data-eta='" + String(eta) + "'" : "") +
                     ">" + String(etaBuf) + "</td>"

@@ -17,6 +17,9 @@ public:
     // Send a push notification when a firmware update is available.
     void notifyUpdate(const String& newVersion, const Config& config);
 
+    // Send an urgent notification when an aircraft squawks an emergency code.
+    void notifyEmergencySquawk(const Aircraft& aircraft, const Config& config);
+
     // Core HTTP send - shared by sendTestNotification() and WebUI.
     // Returns the HTTP response code, or 0 if ntfy is not configured.
     static int sendTestHttp(const Config& config);

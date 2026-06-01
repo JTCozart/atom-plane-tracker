@@ -46,6 +46,37 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     http.end();
 }
 
+void Notifier::notifyEmergencySquawk(const Aircraft& aircraft, const Config& config) {
+    if (strlen(config.notifyToken) == 0 || strlen(config.notifyTopic) == 0) return;
+    if (!config.notifyEmergencySquawk) return;
+
+    const char* meaning = "Emergency";
+    if (aircraft.squawk == "7500")      meaning = "Hijacking";
+    else if (aircraft.squawk == "7600") meaning = "Radio Failure";
+    else if (aircraft.squawk == "7700") meaning = "General Emergency";
+
+    String cs = aircraft.callsign.length() ? aircraft.callsign
+              : aircraft.type.length()     ? aircraft.type : "Unknown";
+    char body[128];
+    snprintf(body, sizeof(body), "%s squawking %s (%s) at %.0f ft",
+             cs.c_str(), aircraft.squawk.c_str(), meaning, aircraft.altitude);
+
+    String trackUrl = "https://globe.adsbexchange.com/?icao=" + aircraft.icao;
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.begin(client, String("https://ntfy.sh/") + config.notifyTopic);
+    http.addHeader("Authorization", String("Bearer ") + config.notifyToken);
+    http.addHeader("Content-Type",  "text/plain");
+    http.addHeader("Title",    String("SQUAWK ") + aircraft.squawk + " \xe2\x80\x94 " + meaning);
+    http.addHeader("Priority", "urgent");
+    http.addHeader("Tags",     "rotating_light,airplane");
+    http.addHeader("Action",   "view, Track Flight, " + trackUrl + ", clear=true");
+    http.POST(body);
+    http.end();
+}
+
 void Notifier::notifyUpdate(const String& newVersion, const Config& config) {
     if (strlen(config.notifyToken) == 0 || strlen(config.notifyTopic) == 0) return;
     if (!config.notifyUpdates) return;

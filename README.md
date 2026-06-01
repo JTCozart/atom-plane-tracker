@@ -6,6 +6,7 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 
 ## What it does
 
+- On first boot (or when `secrets.h` has `WIFI_SSID = "SETUP"`), skips WiFi and goes directly to the setup access point - no 20-second connection wait.
 - Connects to a pre-configured WiFi network on boot and immediately scans for aircraft.
 - Polls [adsb.lol](https://adsb.lol) for aircraft within a configurable radius of a fixed coordinate (scan interval is adjustable).
 - Classifies each aircraft and changes the screen color accordingly:
@@ -17,7 +18,7 @@ ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public AD
 | Commercial | Green | Black | ADS-B category A3/A4/A5 or ICAO airline code pattern |
 | Private / Other | Yellow | Black | Everything else |
 
-- Detection screen shows **callsign**, **aircraft type**, **altitude**, and **ETA until leaving radius**.
+- Detection screen shows **callsign**, **aircraft type**, **altitude**, **ETA until leaving radius**, and **squawk code** (when broadcast). Emergency squawk codes (7500 hijacking, 7600 radio failure, 7700 general emergency) flash red on both the device and web UI.
 - ETA counts down in real time between API polls using the aircraft's last known position, speed, and track.
 - If multiple aircraft are overhead simultaneously the display cycles between them every 5 seconds.
 - When all aircraft leave the radius the screen returns to **SCANNING** with an animated radar sweep.
@@ -54,12 +55,12 @@ The debug screen shows device status and raw data from the last API response:
 DBG HTTP:200 ac:7
 IP: 192.168.1.42
 UP: 00:42:17
-VER: v20260531.1342
+VER: v20260531.2020
 A1B2C3 UAL123 B738
- cat:A3 mil:N 35000ft
+ sqk:1200 mil:N 35000ft
 ---
 D4E5F6 N12345 C172
- cat:A1 mil:N  2500ft
+ sqk:---- mil:N  2500ft
 ---
                 3/10
 ```
@@ -70,7 +71,7 @@ D4E5F6 N12345 C172
 - **Line 2** - device IP address on the local network (see [Configuration web UI](#configuration-web-ui)).
 - **Line 3** - uptime since last boot (`HH:MM:SS`).
 - **Line 4** - current firmware version.
-- **Per aircraft** - ICAO hex, callsign or registration, ICAO type code, ADS-B category, military flag (`Y`/`N`), and barometric altitude.
+- **Per aircraft** - ICAO hex, callsign or registration, ICAO type code, squawk code (`----` if not broadcast), military flag (`Y`/`N`), and barometric altitude.
 - **Short press** - scrolls down 12 lines at a time, wraps to top.
 - **Double short press** (two taps within 400 ms) - sends a test ntfy notification and displays the HTTP response code for 1.5 seconds. Shows `ntfy not configured` if `NTFY_TOPIC` is empty.
 - Scroll position is preserved while in debug. Aircraft arrivals and departures do not exit debug mode.
@@ -83,7 +84,7 @@ The device runs a built-in web server that lets you update settings without refl
 
 ### First run / unconfigured
 
-If WiFi connection fails (wrong credentials or blank `secrets.h`), the device starts a setup access point:
+If `secrets.h` has `WIFI_SSID = "SETUP"` (the default in `secrets.h.example`), or if a WiFi connection attempt fails, the device starts a setup access point immediately — no connection wait:
 
 | | |
 |---|---|
@@ -120,7 +121,7 @@ Both modes serve the same settings page, organised into four tabs:
 |---|---|
 | ntfy Token | Leave blank to keep the current token |
 | ntfy Topic | Leave blank to disable notifications |
-| ntfy Notification Categories | Checkbox dropdown - select which events trigger notifications. Aircraft classes: Military, Medevac, Commercial, Private. Leave all unchecked to notify for all classes. **Updates** (on by default) sends a push when new firmware is available. |
+| ntfy Notification Categories | Checkboxes - select which events trigger notifications. Aircraft classes: Military, Medevac, Commercial, Private. Leave all unchecked to notify for all classes. **Emergency Squawk** (on by default) sends an urgent push when an aircraft squawks 7500, 7600, or 7700. **Firmware Updates** (on by default) sends a push when new firmware is available. |
 
 An **Account Usage** box at the bottom of the Notifications tab shows messages sent, the account limit, and remaining quota for the current billing period (fetched live from `ntfy.sh/v1/account`). It loads automatically when the tab is opened and has a Refresh button.
 
@@ -155,10 +156,11 @@ The firmware can send push notifications via [ntfy.sh](https://ntfy.sh) when an 
 | Medevac | High | 🚑 |
 | Commercial | Default | ✈️ |
 | Private | Low | 🛩️ |
+| Emergency Squawk (7500/7600/7700) | Urgent | 🚨 |
 
-Each notification includes a **Track Flight** action button that opens the live flight on [ADS-B Exchange](https://globe.adsbexchange.com) using the aircraft's ICAO hex code. All notifications use a radar dish icon (📡).
+Each notification includes a **Track Flight** action button that opens the live flight on [ADS-B Exchange](https://globe.adsbexchange.com) using the aircraft's ICAO hex code. Emergency squawk notifications include the squawk meaning in the title (e.g. `SQUAWK 7700 — General Emergency`) and fire even if the aircraft's class is not in the class filter.
 
-A separate **firmware update** notification is sent when a new release is detected (arrow_up tag, default priority). This can be toggled off under **ntfy Notification Categories** in the web UI.
+A separate **firmware update** notification is sent when a new release is detected (arrow_up tag, default priority). Both emergency squawk and firmware update notifications can be toggled under **ntfy Notification Categories** in the web UI.
 
 Configure in `secrets.h` (compile-time defaults) or via the **configuration web UI** (saved to NVS, takes priority):
 
@@ -209,11 +211,11 @@ cp include/secrets.h.example include/secrets.h
 Edit `include/secrets.h` with your defaults. These values are used on first boot and as fallbacks if NVS is empty:
 
 ```cpp
-#define WIFI_SSID        "YourNetworkName"
+#define WIFI_SSID        "YourNetworkName"   // use "SETUP" to skip WiFi and boot straight to setup mode
 #define WIFI_PASSWORD    "YourNetworkPassword"
 
-#define QUERY_LAT         36.0000   // decimal degrees, positive = North
-#define QUERY_LON        -84.0000   // decimal degrees, negative = West
+#define QUERY_LAT         39.8283   // decimal degrees, positive = North (default: center of contiguous US)
+#define QUERY_LON        -98.5795   // decimal degrees, negative = West
 #define QUERY_RADIUS_NM   5.0       // nautical miles (5 NM ≈ 5.75 statute miles)
 
 #define POLL_INTERVAL_MS  15000     // milliseconds between API polls

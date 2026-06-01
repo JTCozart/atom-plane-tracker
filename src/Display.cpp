@@ -181,6 +181,22 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
         }
     }
 
+    // Row 6 - squawk code (live: y=73, historical: y=60 since ETA is omitted)
+    if (aircraft.squawk.length() > 0) {
+        int sqwkY = isHistorical ? 60 : 73;
+        M5.Display.setTextSize(1.5);
+        if (aircraft.isEmergencySquawk()) {
+            bool flashOn = (millis() / 400) % 2 == 0;
+            uint16_t sqBg = flashOn ? _colorRed : _backgroundColors[toIndex(cls)];
+            uint16_t sqFg = flashOn ? _colorWhite : _foregroundColors[toIndex(cls)];
+            M5.Display.fillRect(0, sqwkY - 1, 128, 13, sqBg);
+            M5.Display.setTextColor(sqFg, sqBg);
+        }
+        M5.Display.setCursor(2, sqwkY);
+        M5.Display.printf("SQK: %s", aircraft.squawk.c_str());
+        M5.Display.setTextColor(_foregroundColors[toIndex(cls)], _backgroundColors[toIndex(cls)]);
+    }
+
     // Bottom banner
     if (isHistorical) {
         // Classification tag - aircraft type above history counter

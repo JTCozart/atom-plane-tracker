@@ -39,7 +39,7 @@ The Atom S3R ships blank. You need to load the tracker firmware once using a bro
 5. Click **Choose a file** and select the `-initial-flash.bin` you downloaded
 6. Click **Program** and wait until it says complete
 
-The device will reboot automatically. The screen will show:
+The device will reboot automatically. Because the firmware's default `secrets.h` has `WIFI_SSID = "SETUP"`, it skips the WiFi connection attempt and goes straight to setup mode. The screen will show:
 
 ```
 SETUP MODE
@@ -152,7 +152,7 @@ If you want your phone to alert you when aircraft pass overhead:
 |---|---|
 | **ntfy Token** | Your access token from step 6b |
 | **ntfy Topic** | Your unique topic name |
-| **ntfy Notification Categories** | Which events trigger alerts - leave all unchecked to notify for everything. **Updates** (checked by default) sends a push when new firmware is available. |
+| **ntfy Notification Categories** | Which events trigger alerts - leave all class checkboxes unchecked to notify for everything. **Emergency Squawk** (checked by default) sends an urgent alert when an aircraft squawks 7500, 7600, or 7700. **Firmware Updates** (checked by default) sends a push when new firmware is available. |
 
 4. Click **Save & Reboot**
 
@@ -167,7 +167,7 @@ Whenever an aircraft enters your radius you'll get a push notification with a **
 The device is now scanning for aircraft over your location. Here's what to expect:
 
 - **Animated radar sweep** - actively scanning, no aircraft in range yet
-- **Colored screen with flight info** - an aircraft is overhead; shows callsign, type, altitude, and ETA until it leaves your radius
+- **Colored screen with flight info** - an aircraft is overhead; shows callsign, type, altitude, ETA, and squawk code (emergency codes flash red)
 - The web UI's live preview mirrors the device screen and refreshes every 5 seconds
 
 ### Future firmware updates
@@ -184,7 +184,7 @@ Open **`http://192.168.1.XX`** (the IP from Step 5) in any browser on your home 
 
 ### Device won't connect to WiFi after setup
 
-The device falls back to setup mode (broadcasting `PlaneTracker` hotspot) if it can't reach the network. Reconnect to `192.168.4.1` and double-check the SSID and password.
+The device falls back to setup mode (broadcasting `PlaneTracker` hotspot) if it can't reach the network. Reconnect to `192.168.4.1` and double-check the SSID and password. Note: if the SSID is still set to `SETUP` the device will always boot directly into setup mode — make sure you saved a real network name.
 
 ### Can't find `192.168.4.1`
 

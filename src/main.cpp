@@ -146,7 +146,7 @@ void setup() {
     config.load();
     validatePollInterval();
 
-    if (!connectToWifi()) {
+    if (config.isUnconfigured() || !connectToWifi()) {
         webUI.begin(mode, true);   // AP mode: starts SoftAP + web server
         display.showSetupMode();
         return;  // loop() handles AP from here

@@ -92,6 +92,7 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
         String type = plane["t"]        | "??";
         String cat  = plane["category"] | "?";
         String own  = plane["ownOp"]    | "";
+        String sqwk = plane["squawk"]   | "";
         float  alt  = plane["alt_baro"] | 0.0f;
         bool   mil  = (plane["mil"] | 0) != 0 || ((plane["dbFlags"] | 0) & 1) != 0;
 
@@ -100,8 +101,8 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
                  cs.length() ? cs.c_str() : reg.c_str(), type.c_str());
         _apiResponseLines.push_back(buf);
 
-        snprintf(buf, sizeof(buf), " cat:%s mil:%c %5.0fft",
-                 cat.c_str(), mil ? 'Y' : 'N', alt);
+        snprintf(buf, sizeof(buf), " sqk:%s mil:%c %5.0fft",
+                 sqwk.length() ? sqwk.c_str() : "----", mil ? 'Y' : 'N', alt);
         _apiResponseLines.push_back(buf);
         _apiResponseLines.push_back("---");
     }
@@ -126,15 +127,24 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
         float  gs    = plane["gs"]       | 0.0f;
         float  track = plane["track"]    | 0.0f;
 
+        String squawk = plane["squawk"] | "";
+
         if (_activeAircraft.count(icao)) {
             // Refresh position/speed data so ETA stays accurate
-            Aircraft& existing       = _activeAircraft[icao];
+            Aircraft& existing        = _activeAircraft[icao];
             existing.altitude         = alt;
             existing.latitude         = lat;
             existing.longitude        = lon;
             existing.groundSpeed      = gs;
             existing.trackDegrees     = track;
             existing.positionTimestamp = millis();
+            // Notify if squawk changes to an emergency code mid-flight
+            if (squawk != existing.squawk && Aircraft::isEmergencySquawkCode(squawk)) {
+                existing.squawk = squawk;
+                notifier.notifyEmergencySquawk(existing, cfg);
+            } else {
+                existing.squawk = squawk;
+            }
             continue;
         }
 
@@ -151,7 +161,7 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
 
         AircraftClass classification = Aircraft::classify(callsign, owner, milFlag, cat);
 
-        Aircraft aircraft = { icao, callsign, registration, type, owner, alt, lat, lon, gs, track, millis(), classification };
+        Aircraft aircraft = { icao, callsign, registration, type, owner, squawk, alt, lat, lon, gs, track, millis(), classification };
         _activeAircraft[icao] = aircraft;
         _detectionCounts[toIndex(classification)]++;
         recordInHistory(aircraft);
@@ -167,6 +177,7 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
         if (mode != ScreenMode::Debug) mode = ScreenMode::Scanning;
 
         notifier.notifyDetection(aircraft, cfg);
+        if (aircraft.isEmergencySquawk()) notifier.notifyEmergencySquawk(aircraft, cfg);
     }
 
     // Remove aircraft that no longer appear in the response

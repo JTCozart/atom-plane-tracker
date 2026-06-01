@@ -12,8 +12,12 @@ struct Config {
     char     notifyTopic[64];
     char     notifyClassFilter[32];
     bool     notifyUpdates;
+    bool     notifyEmergencySquawk;
 
-    static constexpr uint32_t kMinPollIntervalMs = 10000;
+    static constexpr uint32_t    kMinPollIntervalMs = 10000;
+    static constexpr const char* kSetupSentinel     = "SETUP";
+
+    bool isUnconfigured() const { return strcmp(ssid, kSetupSentinel) == 0; }
 
     // Load settings from NVS; falls back to secrets.h macro defaults.
     void load();
