@@ -38,6 +38,23 @@ https://www.freertos.org
 
 ---
 
+Leaflet
+Copyright (c) 2010-2024, Vladimir Agafonkin
+Copyright (c) 2010-2011, CloudMade
+License: BSD 2-Clause
+https://leafletjs.com
+
+---
+
+Font Awesome Free
+Copyright (c) Fonticons, Inc.
+Icons: CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/
+Fonts: SIL OFL 1.1 — https://scripts.sil.org/OFL
+CSS:   MIT
+https://fontawesome.com
+
+---
+
 Data Sources
 
 adsb.lol
@@ -45,6 +62,11 @@ ADS-B flight data is provided by adsb.lol, a community-run aggregator
 funded by volunteer feeders. This project uses their public API for
 non-commercial purposes.
 https://adsb.lol
+
+OpenStreetMap
+Map tiles and data © OpenStreetMap contributors.
+License: Open Database License (ODbL) 1.0
+https://www.openstreetmap.org/copyright
 
 ---
 
