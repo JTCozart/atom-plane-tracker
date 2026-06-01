@@ -28,6 +28,9 @@ void WebUI::begin(ScreenMode& mode, bool isSetupMode) {
     _server.on("/api-test",    HTTP_GET,  [this]() { handleApiTest();    });
     _server.on("/ota-check",    HTTP_GET,  [this]() { handleOtaCheck();    });
     _server.on("/ota-update",   HTTP_POST, [this]() { handleOtaUpdate();   });
+    _server.on("/aircraft",      HTTP_GET,  [this]() { handleAircraft();     });
+    _server.on("/history",       HTTP_GET,  [this]() { handleHistory();      });
+    _server.on("/clear-summary", HTTP_POST, [this]() { handleClearSummary(); });
     _server.begin();
 }
 
@@ -52,7 +55,16 @@ void WebUI::handleRoot() {
           "color:#fff;border:none;font-size:1em;cursor:pointer;border-radius:4px}"
           ".layout{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}"
           ".form-col{flex:1;min-width:280px}"
-          ".preview-col{flex:0 0 auto;text-align:center;order:-1}"
+          ".preview-col{flex:0 0 auto;text-align:center;order:-1;min-width:285px}"
+          ".lv-tab-hdr{display:flex;background:#f5f5f5;border-bottom:1px solid #ddd}"
+          ".lv-tab-btn{flex:1;padding:8px 4px;border:none;background:none;cursor:pointer;"
+          "font-size:.82em;border-bottom:3px solid transparent;color:#555}"
+          ".lv-tab-btn.on{background:#fff;border-bottom-color:#1976D2;color:#1976D2;font-weight:600}"
+          ".lv-tab-panel{display:none}"
+          ".lv-tab-panel.on{display:block}"
+          "body.dark .lv-tab-hdr{background:#252525;border-color:#444}"
+          "body.dark .lv-tab-btn{color:#aaa}"
+          "body.dark .lv-tab-btn.on{background:#1a1a1a;border-bottom-color:#64b5f6;color:#64b5f6}"
           "#scr{width:256px;height:256px;display:inline-block;position:relative;"
           "font-family:monospace;font-size:12px;padding:6px;box-sizing:border-box;"
           "border:4px solid #222;border-radius:6px;overflow:hidden;text-align:left}"
@@ -120,6 +132,18 @@ void WebUI::handleRoot() {
           "margin-top:3px;background:#f5f5f5;color:#222}"
           "body.dark .ver-box{background:#2a2a2a;border-color:#555;color:#e0e0e0}"
           "body.dark #otaStatus{color:#aaa}"
+          ".modal-box{background:#fff;color:#222;padding:32px 28px;border-radius:10px;"
+          "text-align:center;max-width:320px;width:90vw}"
+          ".modal-hint{font-size:.85em;color:#666;margin-bottom:4px}"
+          ".modal-cancel{flex:1;padding:10px;background:#eee;color:#222;border:none;"
+          "border-radius:4px;cursor:pointer;font-size:.9em}"
+          "body.dark .modal-box{background:#2a2a2a;color:#e0e0e0}"
+          "body.dark .modal-hint{color:#999}"
+          "body.dark .modal-cancel{background:#444;color:#e0e0e0}"
+          ".wifi-warn{display:none;margin:16px auto 0;max-width:280px;padding:12px 14px;"
+          "background:#FFF8E1;border:1px solid #FFB300;border-radius:6px;"
+          "color:#5D4037;font-size:.82em;text-align:left;line-height:1.5}"
+          "body.dark .wifi-warn{background:#2d2500;border-color:#6d5800;color:#e0c84a}"
           "#apiOut{background:#111;color:#00ff00;font-family:monospace;font-size:11px;"
           "padding:10px;border-radius:4px;height:320px;overflow-y:auto;"
           "white-space:pre-wrap;word-break:break-all;margin-top:10px;"
@@ -195,11 +219,102 @@ void WebUI::handleRoot() {
               "startEtaCountdown();"
             "})"
             ".catch(function(){});"
+          "var _mp=document.getElementById('lvtab-map');"
+          "if(_mp&&_mp.classList.contains('on'))refreshLiveMap();"
           "}"
           "function ctrl(s){"
             "fetch('/control?screen='+s).then(function(){setTimeout(refresh,300);});"
             "document.querySelectorAll('.cb').forEach(function(b){"
               "b.classList.toggle('on',b.dataset.s===s);});"
+          "}"
+          "function clearSummary(){"
+            "if(!confirm('Clear all session totals?'))return;"
+            "fetch('/clear-summary',{method:'POST'}).then(function(){refresh();});"
+          "}"
+          "function isEmergencySqwk(s){return s==='7500'||s==='7600'||s==='7700';}"
+          "function showLiveTab(id){"
+            "document.querySelectorAll('.lv-tab-btn').forEach(function(b){b.classList.remove('on');});"
+            "document.querySelectorAll('.lv-tab-panel').forEach(function(p){p.classList.remove('on');});"
+            "document.querySelector('.lv-tab-btn[data-lvtab=\"'+id+'\"]').classList.add('on');"
+            "document.getElementById('lvtab-'+id).classList.add('on');"
+            "var fsb=document.getElementById('fsBtn');"
+            "if(fsb)fsb.style.display=id==='live'?'':'none';"
+            "if(id==='map'){initLiveMap();setTimeout(function(){_lmap&&_lmap.invalidateSize();refreshLiveMap();},60);}"
+            "if(id==='hist')refreshHistory();"
+          "}"
+          "var _lmap=null,_acMarkers={},_rCircle=null;"
+          "function initLiveMap(){"
+            "if(_lmap)return;"
+            "_lmap=L.map('liveMap').setView([cfgLat,cfgLon],11);"
+            "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',"
+              "{attribution:'&copy; OpenStreetMap',maxZoom:18}).addTo(_lmap);"
+            "_rCircle=L.circle([cfgLat,cfgLon],{radius:cfgRadiusM,"
+              "color:'#1976D2',fillColor:'#1976D2',fillOpacity:0.06,weight:1.5}).addTo(_lmap);"
+            "L.circleMarker([cfgLat,cfgLon],{radius:5,color:'#1976D2',"
+              "fillColor:'#1976D2',fillOpacity:1}).addTo(_lmap);"
+          "}"
+          "function makeAcIcon(bg,fg,track){"
+            "return L.divIcon({html:'<div style=\"width:26px;height:26px;background:'+bg+"
+              "';border:2px solid rgba(0,0,0,0.25);border-radius:50%;display:flex;"
+              "align-items:center;justify-content:center\">"
+              "<span style=\"transform:rotate('+(track-90)+'deg);display:inline-block;"
+              "font-size:14px;color:'+fg+'\">&#9992;</span></div>',"
+              "iconSize:[26,26],iconAnchor:[13,13],className:''});"
+          "}"
+          "function refreshLiveMap(){"
+            "if(!_lmap)return;"
+            "fetch('/aircraft').then(function(r){return r.json();})"
+            ".then(function(d){"
+              "Object.keys(_acMarkers).forEach(function(k){_lmap.removeLayer(_acMarkers[k]);});"
+              "_acMarkers={};"
+              "d.aircraft.forEach(function(ac){"
+                "if(!ac.lat&&!ac.lon)return;"
+                "var m=L.marker([ac.lat,ac.lon],{icon:makeAcIcon(ac.bg,ac.fg,ac.track)}).addTo(_lmap);"
+                "var sqwkHtml=ac.sqwk?(isEmergencySqwk(ac.sqwk)?"
+                  "'<br><span class=\\'sqwk-emrg\\'>SQK '+ac.sqwk+'</span>':"
+                  "'<br>SQK: '+ac.sqwk):'';"
+                "m.bindPopup('<b>'+ac.callsign+'</b><br>'+ac.type+'<br>'"
+                  "+'<b>'+Math.round(ac.alt)+'ft</b> &bull; '+ac.speed+'kt'"
+                  "+'<br>'+ac.dist+'NM '+ac.compass+(ac.inbound?' &#x25b2;':' &#x25bc;')"
+                  "+sqwkHtml);"
+                "_acMarkers[ac.icao]=m;"
+              "});"
+            "}).catch(function(){});"
+          "}"
+          "function refreshHistory(){"
+            "fetch('/history').then(function(r){return r.json();})"
+            ".then(function(d){"
+              "var el=document.getElementById('histPanel');"
+              "if(!d.aircraft.length){"
+                "el.innerHTML='<p style=\"color:#888;text-align:center;margin:20px 0\">No history yet.</p>';"
+                "return;"
+              "}"
+              "var t='<table style=\"width:100%;border-collapse:collapse;font-family:monospace;font-size:11px\">'+"
+                "'<thead><tr style=\"border-bottom:1px solid #888\">'+"
+                "'<th style=\"text-align:center;padding:2px 4px\">Cat</th>'+"
+                "'<th style=\"text-align:left;padding:2px 4px\">Tail</th>'+"
+                "'<th style=\"text-align:left;padding:2px 4px\">Type</th>'+"
+                "'<th style=\"text-align:right;padding:2px 4px\">Alt</th>'+"
+                "'<th style=\"text-align:right;padding:2px 4px\">Spd</th>'+"
+                "'<th style=\"text-align:center;padding:2px 4px\">SQK</th>'+"
+                "'</tr></thead><tbody>';"
+              "d.aircraft.forEach(function(ac){"
+                "var sq=ac.sqwk?ac.sqwk:'----';"
+                "var sqCell=isEmergencySqwk(ac.sqwk)?'<span class=\\'sqwk-emrg\\'>'+sq+'</span>':sq;"
+                "var cat=ac.cls.charAt(0);"
+                "t+='<tr style=\"border-bottom:1px solid #333\">'+"
+                  "'<td style=\"text-align:center;padding:2px 4px\">'+"
+                  "'<span style=\"background:'+ac.bg+';color:'+ac.fg+';padding:1px 5px;border-radius:3px;font-weight:bold\">'+cat+'</span></td>'+"
+                  "'<td style=\"padding:2px 4px\"><a href=\"'+ac.url+'\" target=\"_blank\" style=\"color:inherit\">'+ac.callsign+'</a></td>'+"
+                  "'<td style=\"padding:2px 4px\">'+ac.type+'</td>'+"
+                  "'<td style=\"text-align:right;padding:2px 4px\">'+(ac.alt>0?Math.round(ac.alt)+'ft':'GND')+'</td>'+"
+                  "'<td style=\"text-align:right;padding:2px 4px\">'+(ac.speed>0?Math.round(ac.speed)+'kt':'-')+'</td>'+"
+                  "'<td style=\"text-align:center;padding:2px 4px\">'+sqCell+'</td>'+"
+                  "'</tr>';"
+              "});"
+              "t+='</tbody></table>';"
+              "el.innerHTML=t;"
+            "}).catch(function(){});"
           "}"
           "var _map=null,_marker=null;"
           "function openMap(){"
@@ -345,6 +460,41 @@ void WebUI::handleRoot() {
               "document.getElementById('otaUpdateBtn').disabled=false;"
             "});"
           "}"
+          "function pollReconnect(warnId){"
+            "setTimeout(function(){"
+              "if(warnId)setTimeout(function(){"
+                "var w=document.getElementById(warnId);if(w)w.style.display='block';"
+              "},26000);"
+              "(function p(){"
+                "fetch('/').then(function(r){"
+                  "if(r.ok)window.location.href='/';"
+                  "else setTimeout(p,1000);"
+                "}).catch(function(){setTimeout(p,1000);});"
+              "})();"
+            "},4000);"
+          "}"
+          "function doSave(){"
+            "document.getElementById('saveModal').classList.add('open');"
+            "var data=new FormData(document.querySelector('form[action=\"/save\"]'));"
+            "fetch('/save',{method:'POST',body:data})"
+            ".then(function(){pollReconnect('saveWifiWarn');})"
+            ".catch(function(){pollReconnect('saveWifiWarn');});"
+          "}"
+          "function doClear(){"
+            "document.getElementById('clearConfirm').style.display='';"
+            "document.getElementById('clearProgress').style.display='none';"
+            "document.getElementById('clearModal').classList.add('open');"
+          "}"
+          "function doClearCancel(){"
+            "document.getElementById('clearModal').classList.remove('open');"
+          "}"
+          "function doClearConfirm(){"
+            "document.getElementById('clearConfirm').style.display='none';"
+            "document.getElementById('clearProgress').style.display='';"
+            "fetch('/clear',{method:'POST'})"
+            ".then(function(){pollReconnect('clearWifiWarn');})"
+            ".catch(function(){pollReconnect('clearWifiWarn');});"
+          "}"
           "function toggleFullscreen(){"
             "var el=document.getElementById('liveWrap');"
             "if(!document.fullscreenElement){el.requestFullscreen().catch(function(){});}"
@@ -363,6 +513,15 @@ void WebUI::handleRoot() {
           "<div class='layout'>"
           "<div class='form-col'>"
           "<form method='POST' action='/save'>");
+
+    // Inject runtime config coordinates for the live map JS
+    {
+        char cfgVars[100];
+        snprintf(cfgVars, sizeof(cfgVars),
+            "<script>var cfgLat=%.6f,cfgLon=%.6f,cfgRadiusM=%d;</script>",
+            _cfg.latitude, _cfg.longitude, (int)(_cfg.radius * 1852.0f));
+        html += cfgVars;
+    }
 
     // ── Tab header ────────────────────────────────────────────────────────────
     html += "<div class='card'>"
@@ -494,27 +653,31 @@ void WebUI::handleRoot() {
     html += "</div></div>"; // end tabs + card
 
     // ── Save / Clear ──────────────────────────────────────────────────────────
-    html += "<button class='btn' type='submit'>"
+    html += "<button class='btn' type='button' onclick='doSave()'>"
             "<i class='fa-solid fa-floppy-disk' style='margin-right:6px'></i>Save &amp; Reboot</button>"
             "</form>"
-            "<form method='POST' action='/clear' style='margin-top:10px'>"
-            "<button class='btn' type='submit' style='background:#D32F2F' "
-            "onclick='return confirm(\"Reset all settings to factory defaults? This cannot be undone.\")'>"
+            "<button class='btn' type='button' style='background:#D32F2F;margin-top:10px' onclick='doClear()'>"
             "<i class='fa-solid fa-trash' style='margin-right:6px'></i>Clear All Settings</button>"
-            "</form>"
             "</div>"; // end form-col
 
-    // Right column - live screen preview + controls
+    // Right column - live screen preview with tabs
     html += "<div class='preview-col'>"
             "<div class='card'>"
             "<div class='card-hdr' style='justify-content:space-between'>"
             "<span><i class='fa-solid fa-display'></i>&nbsp;Live Screen</span>"
-            "<button id='fsBtn' onclick='toggleFullscreen()' title='Fullscreen' "
-            "style='background:none;border:none;cursor:pointer;color:inherit;"
-            "font-size:.9em;padding:0 2px'>"
-            "<i class='fa-solid fa-expand'></i></button>"
+            "<button id='fsBtn' onclick='document.getElementById(\"liveWrap\").requestFullscreen()' "
+            "title='Fullscreen' style='background:none;border:none;cursor:pointer;color:inherit;"
+            "font-size:.9em;padding:0 2px'><i class='fa-solid fa-expand'></i></button>"
             "</div>"
-            "<div class='card-body' style='text-align:center'>"
+            "<div class='lv-tab-hdr'>"
+            "<button class='lv-tab-btn on' data-lvtab='live' onclick='showLiveTab(\"live\")'>"
+            "<i class='fa-solid fa-display'></i>&nbsp;Live</button>"
+            "<button class='lv-tab-btn' data-lvtab='map' onclick='showLiveTab(\"map\")'>"
+            "<i class='fa-solid fa-map-location-dot'></i>&nbsp;Map</button>"
+            "<button class='lv-tab-btn' data-lvtab='hist' onclick='showLiveTab(\"hist\")'>"
+            "<i class='fa-solid fa-list'></i>&nbsp;History</button>"
+            "</div>"
+            "<div class='lv-tab-panel on' id='lvtab-live' style='padding:14px;text-align:center'>"
             "<div id='liveWrap'>"
             "<div id='scrWrap'></div>"
             "<div class='ctrl' style='margin-top:10px'>"
@@ -523,6 +686,19 @@ void WebUI::handleRoot() {
             "<button class='cb' data-s='summary' onclick='ctrl(\"summary\")'><i class='fa-solid fa-chart-bar'></i><br>Summary</button>"
             "<button class='cb' data-s='debug'   onclick='ctrl(\"debug\")'><i class='fa-solid fa-bug'></i><br>Debug</button>"
             "</div>"
+            "<div style='margin-top:6px'>"
+            "<button onclick='clearSummary()' style='background:none;border:none;color:#888;"
+            "font-size:.78em;cursor:pointer;padding:2px 6px'>"
+            "<i class='fa-solid fa-eraser' style='margin-right:4px'></i>Clear Summary</button>"
+            "</div>"
+            "</div>"
+            "</div>"
+            "<div class='lv-tab-panel' id='lvtab-map' style='padding:0'>"
+            "<div id='liveMap' style='height:290px;width:100%'></div>"
+            "</div>"
+            "<div class='lv-tab-panel' id='lvtab-hist' style='padding:8px'>"
+            "<div id='histPanel' style='font-family:monospace;font-size:11px'>"
+            "<p style='color:#888;text-align:center;margin:20px 0'>No history yet.</p>"
             "</div>"
             "</div>"
             "</div>"
@@ -530,16 +706,64 @@ void WebUI::handleRoot() {
 
     // OTA update progress modal - no close button, cannot be dismissed
     html += "<div class='modal' id='otaModal' style='z-index:2000'>"
-            "<div style='background:#fff;padding:32px 28px;border-radius:10px;"
-            "text-align:center;max-width:320px;width:90vw'>"
+            "<div class='modal-box'>"
             "<div style='font-size:2.5em;margin-bottom:12px'>&#128257;</div>"
             "<div style='font-size:1.1em;font-weight:700;margin-bottom:8px'>Updating Firmware</div>"
-            "<div id='otaModalVersion' style='font-family:monospace;font-size:.9em;"
-            "color:#555;margin-bottom:16px'></div>"
+            "<div id='otaModalVersion' style='font-family:monospace;font-size:.9em;margin-bottom:16px'></div>"
             "<div style='color:#c00;font-weight:600;margin-bottom:6px'>"
             "<i class='fa-solid fa-triangle-exclamation' style='margin-right:5px'></i>"
             "Do not unplug the device</div>"
-            "<div style='font-size:.85em;color:#666'>The device will reboot automatically when complete.</div>"
+            "<div class='modal-hint'>The device will reboot automatically when complete.</div>"
+            "</div>"
+            "</div>";
+
+    // Save modal
+    html += "<div class='modal' id='saveModal' style='z-index:2000'>"
+            "<div class='modal-box'>"
+            "<div style='font-size:2.5em;margin-bottom:12px'>&#128190;</div>"
+            "<div style='font-size:1.1em;font-weight:700;margin-bottom:8px'>Saving Settings</div>"
+            "<div class='modal-hint'>Rebooting&hellip; returning to settings when back online.</div>"
+            "<div style='color:#c00;font-weight:600;margin-bottom:6px'>"
+            "<i class='fa-solid fa-triangle-exclamation' style='margin-right:5px'></i>"
+            "Do not unplug the device</div>"
+            "<div id='saveWifiWarn' class='wifi-warn'>"
+            "<strong>Taking too long?</strong><br>"
+            "If you changed your WiFi credentials the device may have started its own "
+            "<strong>PlaneTracker</strong> hotspot. Connect to it and visit "
+            "<strong>192.168.4.1</strong> to reconfigure."
+            "</div>"
+            "</div>"
+            "</div>";
+
+    // Clear confirmation / progress modal
+    html += "<div class='modal' id='clearModal' style='z-index:2000'>"
+            "<div class='modal-box'>"
+            "<div id='clearConfirm'>"
+            "<div style='font-size:2.5em;margin-bottom:12px'>&#128465;</div>"
+            "<div style='font-size:1.1em;font-weight:700;margin-bottom:8px'>Clear All Settings?</div>"
+            "<div class='modal-hint' style='margin-bottom:20px'>"
+            "Resets all saved preferences to factory defaults. This cannot be undone.</div>"
+            "<div style='display:flex;gap:10px'>"
+            "<button onclick='doClearCancel()' class='modal-cancel'>Cancel</button>"
+            "<button onclick='doClearConfirm()' "
+            "style='flex:1;padding:10px;background:#D32F2F;color:#fff;border:none;"
+            "border-radius:4px;cursor:pointer;font-size:.9em'>"
+            "<i class='fa-solid fa-trash' style='margin-right:5px'></i>Clear &amp; Reboot</button>"
+            "</div>"
+            "</div>"
+            "<div id='clearProgress' style='display:none'>"
+            "<div style='font-size:2.5em;margin-bottom:12px'>&#128465;</div>"
+            "<div style='font-size:1.1em;font-weight:700;margin-bottom:8px'>Clearing Settings</div>"
+            "<div class='modal-hint'>Rebooting&hellip; returning to settings when back online.</div>"
+            "<div style='color:#c00;font-weight:600;margin-bottom:6px'>"
+            "<i class='fa-solid fa-triangle-exclamation' style='margin-right:5px'></i>"
+            "Do not unplug the device</div>"
+            "<div id='clearWifiWarn' class='wifi-warn'>"
+            "<strong>Taking too long?</strong><br>"
+            "The device may have started its own <strong>PlaneTracker</strong> hotspot. "
+            "Connect to it and visit <strong>192.168.4.1</strong> to reconfigure."
+            "</div>"
+            "</div>"
             "</div>"
             "</div>";
 
@@ -598,7 +822,7 @@ void WebUI::handleSave() {
 
     prefs.end();
 
-    _server.send(200, "text/html", buildRebootPage("Saved!", "Rebooting&hellip;"));
+    _server.send(200, "application/json", "{\"ok\":true}");
     delay(1500);
     ESP.restart();
 }
@@ -629,7 +853,7 @@ void WebUI::handleClear() {
     prefs.clear();  // Erase all keys in this namespace
     prefs.end();
 
-    _server.send(200, "text/html", buildRebootPage("Settings Cleared!", "Rebooting with factory defaults&hellip;"));
+    _server.send(200, "application/json", "{\"ok\":true}");
     delay(1500);
     ESP.restart();
 }
@@ -811,6 +1035,18 @@ String WebUI::buildScreenDiv() {
             } else {
                 inner += "<div>SQK:  " + ac.squawk + "</div>";
             }
+        }
+
+        if (ac.latitude != 0.0f) {
+            float dist = ac.distanceNm(_cfg.latitude, _cfg.longitude);
+            const char* compass = Aircraft::compassPoint(ac.bearingDeg(_cfg.latitude, _cfg.longitude));
+            const char* arrow = ac.isApproaching(_cfg.latitude, _cfg.longitude) ? " &#x25b2;" : " &#x25bc;";
+            snprintf(buf, sizeof(buf), "DST:  %.1f NM %s", dist, compass);
+            inner += "<div>" + String(buf) + String(arrow) + "</div>";
+        }
+        if (ac.groundSpeed > 0) {
+            snprintf(buf, sizeof(buf), "SPD:  %.0f kt", ac.groundSpeed);
+            inner += "<div>" + String(buf) + "</div>";
         }
 
         // Bottom banners
@@ -1001,5 +1237,71 @@ void WebUI::handleOtaUpdate() {
         _server.send(200, "text/html",
                      buildRebootPage("Update Failed", _ota.statusMessage()));
     }
+}
+
+void WebUI::handleAircraft() {
+    auto esc = [](const String& s) -> String {
+        String r = s; r.replace("\"", "'"); return r;
+    };
+    String json = "{\"aircraft\":[";
+    bool first = true;
+    for (const auto& kv : _store.activeAircraft()) {
+        const Aircraft& ac = kv.second;
+        if (!first) json += ",";
+        first = false;
+        String bg = rgb565ToCss(_display.backgroundColorFor(ac.classification));
+        String fg = rgb565ToCss(_display.foregroundColorFor(ac.classification));
+        String cs = ac.callsign.length() ? ac.callsign
+                  : ac.registration.length() ? ac.registration : ac.icao;
+        float dist = ac.distanceNm(_cfg.latitude, _cfg.longitude);
+        const char* compass = Aircraft::compassPoint(ac.bearingDeg(_cfg.latitude, _cfg.longitude));
+        bool inbound = ac.isApproaching(_cfg.latitude, _cfg.longitude);
+        char buf[320];
+        snprintf(buf, sizeof(buf),
+            "{\"icao\":\"%s\",\"callsign\":\"%s\",\"type\":\"%s\","
+            "\"lat\":%.6f,\"lon\":%.6f,\"alt\":%.0f,\"track\":%.0f,\"speed\":%.0f,"
+            "\"sqwk\":\"%s\",\"bg\":\"%s\",\"fg\":\"%s\","
+            "\"dist\":\"%.1f\",\"compass\":\"%s\",\"inbound\":%s}",
+            esc(ac.icao).c_str(), esc(cs).c_str(), esc(ac.type).c_str(),
+            ac.latitude, ac.longitude, ac.altitude, ac.trackDegrees, ac.groundSpeed,
+            esc(ac.squawk).c_str(), bg.c_str(), fg.c_str(),
+            dist, compass, inbound ? "true" : "false");
+        json += buf;
+    }
+    json += "],\"center\":{\"lat\":" + String(_cfg.latitude,  6)
+          + ",\"lon\":"              + String(_cfg.longitude, 6) + "}"
+          + ",\"radiusM\":"          + String((int)(_cfg.radius * 1852.0f)) + "}";
+    _server.send(200, "application/json", json);
+}
+
+void WebUI::handleClearSummary() {
+    _store.clearCounts();
+    _server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void WebUI::handleHistory() {
+    auto esc = [](const String& s) -> String {
+        String r = s; r.replace("\"", "'"); return r;
+    };
+    String json = "{\"aircraft\":[";
+    for (int i = 0; i < _store.webHistoryCount(); i++) {
+        const Aircraft& ac = _store.historyAt(i);
+        if (i > 0) json += ",";
+        String bg = rgb565ToCss(_display.backgroundColorFor(ac.classification));
+        String fg = rgb565ToCss(_display.foregroundColorFor(ac.classification));
+        String cs = ac.callsign.length() ? ac.callsign
+                  : ac.registration.length() ? ac.registration : ac.icao;
+        String trackUrl = "https://globe.adsbexchange.com/?icao=" + ac.icao;
+        char buf[320];
+        snprintf(buf, sizeof(buf),
+            "{\"callsign\":\"%s\",\"type\":\"%s\",\"alt\":%.0f,\"speed\":%.0f,"
+            "\"sqwk\":\"%s\",\"cls\":\"%s\",\"bg\":\"%s\",\"fg\":\"%s\",\"url\":\"%s\"}",
+            esc(cs).c_str(), esc(ac.type).c_str(), ac.altitude, ac.groundSpeed,
+            esc(ac.squawk).c_str(), aircraftClassName(ac.classification),
+            bg.c_str(), fg.c_str(), trackUrl.c_str());
+        json += buf;
+    }
+    json += "]}";
+    _server.send(200, "application/json", json);
 }
 

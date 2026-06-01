@@ -19,7 +19,7 @@ public:
     // Draw a live or history aircraft screen.
     // etaSeconds: pre-computed ETA in seconds, or -1 = unknown (live only; ignored when isHistorical=true).
     // historyIndex / historyCount: used for the history bar when isHistorical=true.
-    void showAircraft(const Aircraft& aircraft, bool isHistorical, int historyIndex, int historyCount, int etaSeconds);
+    void showAircraft(const Aircraft& aircraft, bool isHistorical, int historyIndex, int historyCount, int etaSeconds, double queryLat = 0.0, double queryLon = 0.0);
 
     void showSummary(int militaryCount, int medevacCount, int commercialCount, int privateCount);
 

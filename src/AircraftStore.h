@@ -29,12 +29,20 @@ public:
 
     uint32_t lastCycleTime() const { return _lastCycleTime; }
 
-    int historyCount() const          { return _historyCount; }
+    // Device-navigable history (capped at kDeviceHistoryMax for button UX).
+    int historyCount() const          { return min(_historyCount, kDeviceHistoryMax); }
     int historyIndex() const          { return _historyIndex; }
     void setHistoryIndex(int i)       { _historyIndex = i; }
     const Aircraft& historyAt(int i) const { return _history[i]; }
+    // Full history available to the web UI.
+    int webHistoryCount() const       { return _historyCount; }
 
     int detectionCount(AircraftClass classification) const { return _detectionCounts[toIndex(classification)]; }
+
+    // Persist detection counts to NVS so they survive reboots.
+    void loadCountsFromNVS();
+    void saveCountsToNVS() const;
+    void clearCounts();
 
     const std::vector<String>& apiResponseLines() const { return _apiResponseLines; }
     int lastResponseCode()    const { return _lastResponseCode; }
@@ -48,7 +56,10 @@ private:
     String                     _displayKey;
     uint32_t                   _lastCycleTime = 0;
 
-    Aircraft _history[5];
+    static constexpr int kDeviceHistoryMax = 5;
+    static constexpr int kWebHistoryMax    = 20;
+
+    Aircraft _history[kWebHistoryMax];
     int      _historyCount = 0;
     int      _historyIndex = 0;
 

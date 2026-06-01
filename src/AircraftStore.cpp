@@ -1,4 +1,5 @@
 ﻿#include "AircraftStore.h"
+#include <Preferences.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -12,11 +13,38 @@ static const char* API_FMT = "https://api.adsb.lol/v2/lat/%.6f/lon/%.6f/dist/%.1
 // ── History ───────────────────────────────────────────────────────────────────
 
 void AircraftStore::recordInHistory(const Aircraft& aircraft) {
-    int slots = (_historyCount < 5) ? _historyCount : 4;
+    int slots = min(_historyCount, kWebHistoryMax - 1);
     for (int i = slots; i > 0; i--) _history[i] = _history[i - 1];
     _history[0] = aircraft;
-    if (_historyCount < 5) _historyCount++;
+    if (_historyCount < kWebHistoryMax) _historyCount++;
     _historyIndex = 0;  // always show newest on next HIST visit
+}
+
+// ── Detection count persistence ───────────────────────────────────────────────
+
+void AircraftStore::loadCountsFromNVS() {
+    Preferences prefs;
+    prefs.begin("plantracker", true);
+    _detectionCounts[0] = prefs.getInt("sumMil",  0);
+    _detectionCounts[1] = prefs.getInt("sumMed",  0);
+    _detectionCounts[2] = prefs.getInt("sumComm", 0);
+    _detectionCounts[3] = prefs.getInt("sumPriv", 0);
+    prefs.end();
+}
+
+void AircraftStore::saveCountsToNVS() const {
+    Preferences prefs;
+    prefs.begin("plantracker", false);
+    prefs.putInt("sumMil",  _detectionCounts[0]);
+    prefs.putInt("sumMed",  _detectionCounts[1]);
+    prefs.putInt("sumComm", _detectionCounts[2]);
+    prefs.putInt("sumPriv", _detectionCounts[3]);
+    prefs.end();
+}
+
+void AircraftStore::clearCounts() {
+    for (int i = 0; i < 4; i++) _detectionCounts[i] = 0;
+    saveCountsToNVS();
 }
 
 // ── Active aircraft accessors ─────────────────────────────────────────────────
@@ -164,6 +192,7 @@ void AircraftStore::fetch(const Config& cfg, Notifier& notifier, ScreenMode& mod
         Aircraft aircraft = { icao, callsign, registration, type, owner, squawk, alt, lat, lon, gs, track, millis(), classification };
         _activeAircraft[icao] = aircraft;
         _detectionCounts[toIndex(classification)]++;
+        saveCountsToNVS();
         recordInHistory(aircraft);
 
         Serial.printf("[DETECT] %s %s %s  alt=%.0f  class=%d\n",

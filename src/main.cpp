@@ -93,7 +93,7 @@ static void render() {
                 const Aircraft* ac = store.currentAircraft();
                 if (ac) {
                     int eta = ac->etaSeconds(config.latitude, config.longitude, config.radius);
-                    display.showAircraft(*ac, false, 0, 0, eta);
+                    display.showAircraft(*ac, false, 0, 0, eta, config.latitude, config.longitude);
                 }
             } else if (store.consecutiveFailures() > 0) {
                 display.showLostConnection(store.consecutiveFailures());
@@ -107,7 +107,8 @@ static void render() {
                                      true,
                                      store.historyIndex(),
                                      store.historyCount(),
-                                     -1);
+                                     -1,
+                                     config.latitude, config.longitude);
             else
                 display.showScanning();
             break;
@@ -144,6 +145,7 @@ void setup() {
 
     display.begin();
     config.load();
+    store.loadCountsFromNVS();
     validatePollInterval();
 
     if (config.isUnconfigured() || !connectToWifi()) {
@@ -228,7 +230,17 @@ void loop() {
                         mode = ScreenMode::Summary;
                     }
                     break;
-                case ScreenMode::Summary:  mode = ScreenMode::Scanning; break;
+                case ScreenMode::Summary: {
+                    uint32_t now = millis();
+                    if (now - lastClickTime <= kDoubleClickWindowMs) {
+                        lastClickTime = 0;
+                        store.clearCounts();
+                    } else {
+                        lastClickTime = now;
+                        mode = ScreenMode::Scanning;
+                    }
+                    break;
+                }
                 default: break;
             }
             render();

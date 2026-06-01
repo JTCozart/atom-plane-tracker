@@ -105,3 +105,34 @@ int Aircraft::adjustedEta(int rawEta) const {
     int elapsed = (int)((millis() - positionTimestamp) / 1000);
     return max(0, rawEta - elapsed);
 }
+
+// ── Distance / bearing helpers ────────────────────────────────────────────────
+
+float Aircraft::distanceNm(double queryLat, double queryLon) const {
+    const float NM_PER_DEG_LAT = 60.0f;
+    float dlat = (latitude  - (float)queryLat) * NM_PER_DEG_LAT;
+    float dlon = (longitude - (float)queryLon) * NM_PER_DEG_LAT
+                 * cosf((float)queryLat * M_PI / 180.0f);
+    return sqrtf(dlat * dlat + dlon * dlon);
+}
+
+float Aircraft::bearingDeg(double queryLat, double queryLon) const {
+    float dlon = (longitude - (float)queryLon) * cosf((float)queryLat * M_PI / 180.0f);
+    float dlat = latitude - (float)queryLat;
+    float b = atan2f(dlon, dlat) * 180.0f / M_PI;
+    if (b < 0) b += 360.0f;
+    return b;
+}
+
+const char* Aircraft::compassPoint(float bearing) {
+    static const char* pts[] = {"N","NE","E","SE","S","SW","W","NW"};
+    return pts[((int)((bearing + 22.5f) / 45.0f)) % 8];
+}
+
+bool Aircraft::isApproaching(double queryLat, double queryLon) const {
+    if (groundSpeed < 5.0f) return false;
+    float bearingBack = fmodf(bearingDeg(queryLat, queryLon) + 180.0f, 360.0f);
+    float diff = fabsf(trackDegrees - bearingBack);
+    if (diff > 180.0f) diff = 360.0f - diff;
+    return diff < 90.0f;
+}

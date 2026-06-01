@@ -142,7 +142,8 @@ void Display::showSetupMode() {
 // ── Aircraft screen ───────────────────────────────────────────────────────────
 
 void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
-                            int historyIndex, int historyCount, int etaSeconds) {
+                            int historyIndex, int historyCount, int etaSeconds,
+                            double queryLat, double queryLon) {
     AircraftClass cls = aircraft.classification;
     M5.Display.fillScreen(_backgroundColors[toIndex(cls)]);
     M5.Display.setTextColor(_foregroundColors[toIndex(cls)], _backgroundColors[toIndex(cls)]);
@@ -195,6 +196,18 @@ void Display::showAircraft(const Aircraft& aircraft, bool isHistorical,
         M5.Display.setCursor(2, sqwkY);
         M5.Display.printf("SQK: %s", aircraft.squawk.c_str());
         M5.Display.setTextColor(_foregroundColors[toIndex(cls)], _backgroundColors[toIndex(cls)]);
+    }
+
+    // Row 7 - distance, bearing direction, and approach indicator (live: y=86, hist: y=73)
+    if (queryLat != 0.0 && aircraft.latitude != 0.0f) {
+        int distY = isHistorical ? 73 : 86;
+        float dist = aircraft.distanceNm(queryLat, queryLon);
+        const char* compass = Aircraft::compassPoint(aircraft.bearingDeg(queryLat, queryLon));
+        char dir = aircraft.isApproaching(queryLat, queryLon) ? '>' : '<';
+        M5.Display.setTextSize(1.5);
+        M5.Display.setTextColor(_foregroundColors[toIndex(cls)], _backgroundColors[toIndex(cls)]);
+        M5.Display.setCursor(2, distY);
+        M5.Display.printf("%.1fNM %s %c", dist, compass, dir);
     }
 
     // Bottom banner
@@ -253,6 +266,11 @@ void Display::showSummary(int militaryCount, int medevacCount, int commercialCou
     M5.Display.setCursor(4, y); M5.Display.printf("MED:   %3d", medevacCount);    y += 20;
     M5.Display.setCursor(4, y); M5.Display.printf("COMM:  %3d", commercialCount); y += 20;
     M5.Display.setCursor(4, y); M5.Display.printf("PRIV:  %3d", privateCount);
+
+    M5.Display.setTextSize(1);
+    M5.Display.setTextColor(M5.Display.color565(120, 120, 120), _colorBlack);
+    M5.Display.setCursor(4, 116);
+    M5.Display.print("2x btn: clear");
 }
 
 // ── Debug screen ──────────────────────────────────────────────────────────────

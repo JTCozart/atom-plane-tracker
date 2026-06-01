@@ -48,6 +48,9 @@ private:
     void handleApiTest();
     void handleOtaCheck();
     void handleOtaUpdate();
+    void handleAircraft();
+    void handleHistory();
+    void handleClearSummary();
 
     String buildScreenDiv();
     static String buildRebootPage(const String& heading, const String& subtext);
