@@ -38,6 +38,16 @@ https://www.freertos.org
 
 ---
 
+Data Sources
+
+adsb.lol
+ADS-B flight data is provided by adsb.lol, a community-run aggregator
+funded by volunteer feeders. This project uses their public API for
+non-commercial purposes.
+https://adsb.lol
+
+---
+
 The source code of this project is available at:
 https://github.com/JTCozart/atom-plane-tracker
 
