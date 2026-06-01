@@ -705,7 +705,7 @@ void WebUI::handleRoot() {
             "<div class='card'>"
             "<div class='card-hdr' style='justify-content:space-between'>"
             "<span><i class='fa-solid fa-display'></i>&nbsp;Live Screen</span>"
-            "<button id='fsBtn' onclick='document.getElementById(\"liveWrap\").requestFullscreen()' "
+            "<button id='fsBtn' onclick='toggleFullscreen()' "
             "title='Fullscreen' style='background:none;border:none;cursor:pointer;color:inherit;"
             "font-size:.9em;padding:0 2px'><i class='fa-solid fa-expand'></i></button>"
             "</div>"
