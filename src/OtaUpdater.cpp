@@ -51,10 +51,12 @@ bool OtaUpdater::check() {
     filter["assets"][0]["name"]                 = true;
     filter["assets"][0]["browser_download_url"] = true;
 
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, http.getStream(),
-                                               DeserializationOption::Filter(filter));
+    String body = http.getString();
     http.end();
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, body,
+                                               DeserializationOption::Filter(filter));
     if (err) {
         _status = "Parse error";
         Serial.printf("[OTA] JSON parse error: %s\n", err.c_str());
