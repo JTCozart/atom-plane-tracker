@@ -1,4 +1,5 @@
 #include "InsightsReporter.h"
+#include "version.h"
 
 #ifndef ESP_INSIGHT_AUTH_KEY
 #define ESP_INSIGHT_AUTH_KEY ""
@@ -6,6 +7,7 @@
 
 extern "C" {
 #include <esp_insights.h>
+#include <esp_diagnostics.h>
 }
 
 void InsightsReporter::begin() {
@@ -17,4 +19,7 @@ void InsightsReporter::begin() {
         .auth_key = kKey,
     };
     esp_insights_init(&cfg);
+
+    // Report firmware version as a boot event — visible in Insights dashboard Events tab.
+    ESP_DIAG_EVENT("boot", "Firmware version: %s", FIRMWARE_VERSION);
 }
