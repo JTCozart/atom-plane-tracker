@@ -43,7 +43,7 @@ void AircraftPersistence::saveCounts(const int* counts) const {
 int AircraftPersistence::loadHistory(Aircraft* history) const {
     Preferences prefs;
     prefs.begin(kNvsNamespace, true);
-    int count = min(prefs.getInt("histCount", 0), kWebHistoryMax);
+    int count = min((int)prefs.getInt("histCount", 0), kWebHistoryMax);
     if (count > 0) {
         StoredAircraft buf[kWebHistoryMax] = {};
         prefs.getBytes("histData", buf, sizeof(StoredAircraft) * count);
