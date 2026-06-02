@@ -22,7 +22,8 @@ void ScreenController::toggleDebug() {
 }
 
 void ScreenController::onNewAircraftDetected() {
-    if (_mode != ScreenMode::Debug && _mode != ScreenMode::Radar)
+    if (_mode != ScreenMode::Debug && _mode != ScreenMode::Radar
+        && _mode != ScreenMode::PinDisplay)
         _mode = ScreenMode::Scanning;
 }
 
@@ -53,6 +54,12 @@ bool ScreenController::handleShortPress(AircraftStore& store) {
         case ScreenMode::Radar:
             _mode = ScreenMode::Scanning;
             break;
+        case ScreenMode::PinDisplay:
+            _pinCancelled = true;
+            _pendingPin   = "";
+            _mode         = ScreenMode::Scanning;
+            _webControlChanged = true;
+            break;
         default: break;
     }
     return false;
@@ -71,9 +78,15 @@ bool ScreenController::handleDebugShortPress(int totalLines, int pageSize) {
 }
 
 bool ScreenController::consumeWebControlChange() {
-    bool changed      = _webControlChanged;
+    bool changed       = _webControlChanged;
     _webControlChanged = false;
     return changed;
+}
+
+bool ScreenController::consumePinCancelled() {
+    bool v        = _pinCancelled;
+    _pinCancelled = false;
+    return v;
 }
 
 bool ScreenController::update(uint32_t now) {

@@ -41,6 +41,7 @@ public:
 
     void showDebug(const std::vector<String>& lines, int scrollOffset, const DiagnosticInfo& info);
 
+    void showPinDisplay(const String& pin, const char* title = "RESET PIN");
     void showMessage(const String& line1, const String& line2 = "");
     void showLostConnection(int retryCount);
 

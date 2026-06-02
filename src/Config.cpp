@@ -29,7 +29,10 @@ void Config::load() {
     notifyEmergencySquawk  = prefs.getBool("ntfyEmergSquawk", true);
     notifyPoi              = prefs.getBool("ntfyPoi",         false);
     strncpy(poiTypes, prefs.getString("poiTypes", "").c_str(), sizeof(poiTypes) - 1);
-    poiEnabled             = prefs.getBool("poiEnabled",      false);
+    poiEnabled          = prefs.getBool("poiEnabled",   false);
+    strncpy(webPasswordHash, prefs.getString("webPassHash", "").c_str(), sizeof(webPasswordHash) - 1);
+    strncpy(webPasswordSalt, prefs.getString("webSalt",     "").c_str(), sizeof(webPasswordSalt) - 1);
+    requireWebPassword  = prefs.getBool("reqWebPass",   false);
     prefs.end();
 }
 

@@ -6,6 +6,42 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <mbedtls/sha256.h>
+#include <esp_random.h>
+
+// ── Password / auth helpers ───────────────────────────────────────────────────
+
+static String computePasswordHash(const String& password, const String& salt) {
+    String input = salt + password;
+    uint8_t digest[32];
+    mbedtls_sha256_context ctx;
+    mbedtls_sha256_init(&ctx);
+    mbedtls_sha256_starts(&ctx, 0);
+    mbedtls_sha256_update(&ctx, (const uint8_t*)input.c_str(), input.length());
+    mbedtls_sha256_finish(&ctx, digest);
+    mbedtls_sha256_free(&ctx);
+
+    char hex[65];
+    for (int i = 0; i < 32; i++) snprintf(hex + i * 2, 3, "%02x", digest[i]);
+    hex[64] = '\0';
+    return String(hex);
+}
+
+static String generateHexRandom(int bytes) {
+    String out;
+    out.reserve(bytes * 2);
+    for (int i = 0; i < bytes; i += 4) {
+        uint32_t r = esp_random();
+        char buf[9];
+        snprintf(buf, sizeof(buf), "%08x", r);
+        int take = min(8, (bytes - i) * 2);
+        out += String(buf).substring(0, take);
+    }
+    return out;
+}
+
+static String generateSalt()  { return generateHexRandom(16); }  // 32-char hex
+static String generateToken() { return generateHexRandom(16); }  // 32-char hex, reused for session
 
 static String htmlEscape(const char* s) {
     String out;
@@ -34,24 +70,45 @@ void WebUI::begin(bool isSetupMode) {
         WiFi.softAP("PlaneTracker", "PlaneTracker");
     }
 
-    _server.on("/",            HTTP_GET,  [this]() { handleRoot();       });
-    _server.on("/save",        HTTP_POST, [this]() { handleSave();       });
-    _server.on("/clear",       HTTP_POST, [this]() { handleClear();      });
-    _server.on("/control",     HTTP_GET,  [this]() { handleControl();    });
-    _server.on("/screen",      HTTP_GET,  [this]() { handleScreen();     });
-    _server.on("/notify-test", HTTP_POST, [this]() { handleNotifyTest(); });
-    _server.on("/ntfy-stats",  HTTP_GET,  [this]() { handleNtfyStats();  });
-    _server.on("/api-test",    HTTP_GET,  [this]() { handleApiTest();    });
-    _server.on("/ota-check",    HTTP_GET,  [this]() { handleOtaCheck();    });
-    _server.on("/ota-update",   HTTP_POST, [this]() { handleOtaUpdate();   });
-    _server.on("/aircraft",      HTTP_GET,  [this]() { handleAircraft();     });
-    _server.on("/history",       HTTP_GET,  [this]() { handleHistory();      });
-    _server.on("/clear-summary", HTTP_POST, [this]() { handleClearSummary(); });
+    _server.on("/",               HTTP_GET,  [this]() { handleRoot();           });
+    _server.on("/save",           HTTP_POST, [this]() { handleSave();           });
+    _server.on("/clear",          HTTP_POST, [this]() { handleClear();          });
+    _server.on("/control",        HTTP_GET,  [this]() { handleControl();        });
+    _server.on("/screen",         HTTP_GET,  [this]() { handleScreen();         });
+    _server.on("/notify-test",    HTTP_POST, [this]() { handleNotifyTest();     });
+    _server.on("/ntfy-stats",     HTTP_GET,  [this]() { handleNtfyStats();      });
+    _server.on("/api-test",       HTTP_GET,  [this]() { handleApiTest();        });
+    _server.on("/ota-check",      HTTP_GET,  [this]() { handleOtaCheck();       });
+    _server.on("/ota-update",     HTTP_POST, [this]() { handleOtaUpdate();      });
+    _server.on("/aircraft",       HTTP_GET,  [this]() { handleAircraft();       });
+    _server.on("/history",        HTTP_GET,  [this]() { handleHistory();        });
+    _server.on("/clear-summary",  HTTP_POST, [this]() { handleClearSummary();   });
+    _server.on("/login",          HTTP_POST, [this]() { handleLoginPost();      });
+    _server.on("/forgot-password",HTTP_GET,  [this]() { handleForgotPassword(); });
+    _server.on("/pin-reset",      HTTP_POST, [this]() { handlePinReset();       });
+    _server.on("/pin-cancel",     HTTP_POST, [this]() { handlePinCancel();      });
+    _server.on("/pin-status",     HTTP_GET,  [this]() { handlePinStatus();      });
+
+    const char* headers[] = {"X-Auth-Token"};
+    _server.collectHeaders(headers, 1);
     _server.begin();
 }
 
 void WebUI::processRequests() {
     _server.handleClient();
+}
+
+bool WebUI::checkAuth() {
+    if (_inSetupMode) return true;
+    if (!_cfg.requireWebPassword || !_cfg.hasWebPassword()) return true;
+    if (_sessionToken.length() == 0) {
+        _server.send(401, "application/json", "{\"error\":\"unauthorized\"}");
+        return false;
+    }
+    String token = _server.header("X-Auth-Token");
+    if (token.length() > 0 && token == _sessionToken) return true;
+    _server.send(401, "application/json", "{\"error\":\"unauthorized\"}");
+    return false;
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -137,6 +194,9 @@ void WebUI::handleRoot() {
           "body.dark label{color:#bbb}"
           "body.dark small{color:#999}"
           "body.dark h2,body.dark h3{color:#e0e0e0}"
+          ".sec{font-size:.78em;font-weight:700;text-transform:uppercase;letter-spacing:.06em;"
+          "color:#666;margin-top:20px;padding-bottom:5px;border-bottom:1px solid #ddd}"
+          ".sec:first-child{margin-top:4px}"
           "body.dark .sec{color:#aaa;border-bottom-color:#444}"
           "body.dark #mapWrap{background:#2a2a2a;color:#e0e0e0}"
           "body.dark .map-hint{color:#aaa}"
@@ -174,11 +234,178 @@ void WebUI::handleRoot() {
           "font-size:calc(min(80vh,80vw)*12/256)!important}"
           "#liveWrap:fullscreen .ctrl{width:min(80vh,80vw);display:flex;gap:6px}"
           "#liveWrap:fullscreen .cb{flex:1;padding:12px 0;font-size:.9em}"
+          ".auth-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);"
+          "z-index:9999;align-items:center;justify-content:center}"
+          ".auth-overlay.open{display:flex}"
+          "body.pre-auth>*:not(#authOverlay){display:none!important}"
+          "#logoutBtn{position:fixed;top:10px;right:56px;background:none;"
+          "border:1px solid #aaa;border-radius:20px;padding:4px 10px;"
+          "cursor:pointer;font-size:1em;z-index:999;display:none}"
+          "body.dark #logoutBtn{border-color:#666;color:#e0e0e0}"
+          ".auth-box{background:#fff;color:#222;padding:32px 28px;border-radius:10px;"
+          "max-width:320px;width:90vw}"
+          ".auth-box h3{margin:0 0 16px;font-size:1.2em;text-align:center}"
+          ".auth-err{color:#c00;font-size:.85em;margin-top:6px;display:none}"
+          ".pin-sect{display:none;margin-top:16px;border-top:1px solid #ddd;padding-top:14px}"
+          "body.dark .auth-box{background:#2a2a2a;color:#e0e0e0}"
+          "body.dark .pin-sect{border-color:#444}"
+          "body.dark .auth-overlay .modal-cancel{background:#444;color:#e0e0e0}"
           "</style>"
           "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
           "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css'>"
           "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>"
           "<script>"
+          // ── Auth helpers ──────────────────────────────────────────────────────
+          "var _authLocked=false;"
+          "function _getTok(){return sessionStorage.getItem('pt_tok')||'';}"
+          "function _authHdrs(){var t=_getTok();return t?{'X-Auth-Token':t}:{};}"
+          "function authFetch(url,opts){"
+            "opts=opts||{};"
+            "opts.headers=Object.assign({},opts.headers||{},_authHdrs());"
+            "return fetch(url,opts).then(function(r){"
+              "if(r.status===401){"
+                "sessionStorage.removeItem('pt_tok');"
+                "showAuthOverlay();"
+                "return new Promise(function(){});"
+              "}"
+              "return r;"
+            "});"
+          "}"
+          "function showAuthOverlay(){"
+            "var _ov=document.getElementById('authOverlay');"
+            "if(_ov.classList.contains('open'))return;"
+            "['saveModal','clearModal','otaModal'].forEach(function(id){"
+              "var e=document.getElementById(id);if(e)e.classList.remove('open');"
+            "});"
+            "_ov.classList.add('open');"
+            "setTimeout(function(){document.getElementById('authPwd').focus();},50);"
+          "}"
+          "function hideAuthOverlay(){"
+            "stopPinPoll();"
+            "document.getElementById('authOverlay').classList.remove('open');"
+            "document.body.classList.remove('pre-auth');"
+            "_authLocked=false;"
+            "document.getElementById('authLoginView').style.display='';"
+            "document.getElementById('authLockout').style.display='none';"
+            "document.getElementById('authCode').style.display='none';"
+            "document.getElementById('authPinSect').style.display='none';"
+            "document.getElementById('authErr').style.display='none';"
+            "document.getElementById('authPinErr').style.display='none';"
+            "if(cfgAuthRequired){var lb=document.getElementById('logoutBtn');if(lb)lb.style.display='block';}"
+          "}"
+          "function doLogout(){"
+            "stopPinPoll();"
+            "sessionStorage.removeItem('pt_tok');"
+            "_authLocked=false;"
+            "document.getElementById('authPwd').value='';"
+            "document.getElementById('authErr').style.display='none';"
+            "document.getElementById('authPinErr').style.display='none';"
+            "document.getElementById('authLockout').style.display='none';"
+            "document.getElementById('authCode').style.display='none';"
+            "document.getElementById('authPinSect').style.display='none';"
+            "document.getElementById('authLoginView').style.display='';"
+            "document.getElementById('logoutBtn').style.display='none';"
+            "document.body.classList.add('pre-auth');"
+            "document.getElementById('authOverlay').classList.add('open');"
+            "setTimeout(function(){document.getElementById('authPwd').focus();},50);"
+          "}"
+          "function doLogin(){"
+            "var pwd=document.getElementById('authPwd').value;"
+            "var e=document.getElementById('authErr');e.style.display='none';"
+            "var f=new FormData();"
+            "f.append('password',pwd);"
+            "if(_authLocked){"
+              "var code=document.getElementById('authCode').value;"
+              "f.append('code',code);"
+            "}"
+            "fetch('/login',{method:'POST',body:f})"
+            ".then(function(r){return r.json();})"
+            ".then(function(d){"
+              "if(d.ok){"
+                "sessionStorage.setItem('pt_tok',d.token);"
+                "hideAuthOverlay();"
+              "}else if(d.lockout){"
+                "_authLocked=true;"
+                "document.getElementById('authLockout').style.display='';"
+                "document.getElementById('authCode').style.display='';"
+                "startPinPoll();"
+                "e.style.display='block';"
+                "e.textContent=d.wrongCode"
+                  "?(d.regen?'Wrong code (3 attempts - new code shown on device).':'Wrong security code. Try again.')"
+                  ":'Too many attempts. Check your device for a security code.';"
+              "}else{"
+                "_authLocked=false;"
+                "document.getElementById('authLockout').style.display='none';"
+                "document.getElementById('authCode').style.display='none';"
+                "e.style.display='block';e.textContent='Incorrect password.';"
+              "}"
+            "}).catch(function(){e.style.display='block';e.textContent='Request failed.';});"
+          "}"
+          "function showForgot(){"
+            "fetch('/forgot-password')"
+            ".then(function(r){return r.json();})"
+            ".then(function(d){"
+              "if(d.ok){"
+                "document.getElementById('authLoginView').style.display='none';"
+                "document.getElementById('authPinSect').style.display='block';"
+                "startPinPoll();"
+                "setTimeout(function(){document.getElementById('authPin').focus();},50);"
+              "}else alert('Could not start PIN reset. Try again.');"
+            "}).catch(function(){alert('Request failed.');});"
+          "}"
+          "function doReset(){"
+            "var pin=document.getElementById('authPin').value;"
+            "var pwd=document.getElementById('authNewPwd').value;"
+            "var e=document.getElementById('authPinErr');e.style.display='none';"
+            "var f=new FormData();f.append('pin',pin);f.append('newPass',pwd);"
+            "fetch('/pin-reset',{method:'POST',body:f})"
+            ".then(function(r){return r.json();})"
+            ".then(function(d){"
+              "if(d.ok){sessionStorage.setItem('pt_tok',d.token);hideAuthOverlay();}"
+              "else{"
+                "e.style.display='block';"
+                "e.textContent=d.regen"
+                  "?'Wrong PIN (3 attempts - new PIN shown on device).'"
+                  ":'Wrong PIN. Try again.';"
+                "document.getElementById('authPin').value='';"
+              "}"
+            "}).catch(function(){e.style.display='block';e.textContent='Request failed.';});"
+          "}"
+          "var _pinPoll=null;"
+          "function startPinPoll(){"
+            "if(_pinPoll)return;"
+            "_pinPoll=setInterval(function(){"
+              "fetch('/pin-status')"
+              ".then(function(r){return r.json();})"
+              ".then(function(d){"
+                "if(d.active)return;"
+                "stopPinPoll();"
+                // Device button cancelled — reset whichever PIN flow was active
+                "var ps=document.getElementById('authPinSect');"
+                "if(ps&&ps.style.display==='block'){"
+                  "ps.style.display='none';"
+                  "document.getElementById('authLoginView').style.display='';"
+                "}"
+                "if(_authLocked){"
+                  "_authLocked=false;"
+                  "document.getElementById('authLockout').style.display='none';"
+                  "document.getElementById('authCode').style.display='none';"
+                "}"
+                "setTimeout(function(){document.getElementById('authPwd').focus();},50);"
+              "}).catch(function(){});"
+            "},2000);"
+          "}"
+          "function stopPinPoll(){"
+            "clearInterval(_pinPoll);_pinPoll=null;"
+          "}"
+          "function doCancelReset(){"
+            "fetch('/pin-cancel',{method:'POST'}).then(function(){}).catch(function(){});"
+            "stopPinPoll();"
+            "document.getElementById('authPinSect').style.display='none';"
+            "document.getElementById('authLoginView').style.display='';"
+            "setTimeout(function(){document.getElementById('authPwd').focus();},50);"
+          "}"
+          // ─────────────────────────────────────────────────────────────────────
           "function startRadar(c){"
             "if(window._radarRaf){cancelAnimationFrame(window._radarRaf);window._radarRaf=null;}"
             "var ctx=c.getContext('2d');"
@@ -226,7 +453,7 @@ void WebUI::handleRoot() {
             "},1000);"
           "}"
           "function refresh(){"
-            "fetch('/screen?fragment=1')"
+            "authFetch('/screen?fragment=1')"
             ".then(function(r){return r.text();})"
             ".then(function(h){"
               "if(window._radarRaf){cancelAnimationFrame(window._radarRaf);window._radarRaf=null;}"
@@ -244,7 +471,7 @@ void WebUI::handleRoot() {
           "if(_mp&&_mp.classList.contains('on'))refreshLiveMap();"
           "}"
           "function ctrl(s){"
-            "fetch('/control?screen='+s).then(function(){setTimeout(refresh,300);});"
+            "authFetch('/control?screen='+s).then(function(){setTimeout(refresh,300);});"
             "document.querySelectorAll('.cb').forEach(function(b){"
               "b.classList.toggle('on',b.dataset.s===s);});"
           "}"
@@ -296,7 +523,7 @@ void WebUI::handleRoot() {
               "}"
             "}"
             "draw(null);"
-            "fetch('/aircraft').then(function(r){return r.json();})"
+            "authFetch('/aircraft').then(function(r){return r.json();})"
             ".then(function(d){draw(d.aircraft);})"
             ".catch(function(){});"
             "window._radarBlipsTimer=setTimeout(function(){"
@@ -309,7 +536,7 @@ void WebUI::handleRoot() {
               "'Clear Summary?',"
               "'Reset all session totals to zero. This cannot be undone.',"
               "'Clear','#37474F',"
-              "function(){fetch('/clear-summary',{method:'POST'}).then(function(){refresh();});}"
+              "function(){authFetch('/clear-summary',{method:'POST'}).then(function(){refresh();});}"
             ");"
           "}"
           "function isEmergencySqwk(s){return s==='7500'||s==='7600'||s==='7700';}"
@@ -344,7 +571,7 @@ void WebUI::handleRoot() {
           "}"
           "function refreshLiveMap(){"
             "if(!_lmap)return;"
-            "fetch('/aircraft').then(function(r){return r.json();})"
+            "authFetch('/aircraft').then(function(r){return r.json();})"
             ".then(function(d){"
               "Object.keys(_acMarkers).forEach(function(k){_lmap.removeLayer(_acMarkers[k]);});"
               "_acMarkers={};"
@@ -363,7 +590,7 @@ void WebUI::handleRoot() {
             "}).catch(function(){});"
           "}"
           "function refreshHistory(){"
-            "fetch('/history').then(function(r){return r.json();})"
+            "authFetch('/history').then(function(r){return r.json();})"
             ".then(function(d){"
               "var el=document.getElementById('histPanel');"
               "if(!d.aircraft.length){"
@@ -426,7 +653,7 @@ void WebUI::handleRoot() {
           "}"
           "function loadNtfyStats(btn){"
             "if(btn){btn.disabled=true;btn.textContent='Checking...';}"
-            "fetch('/ntfy-stats')"
+            "authFetch('/ntfy-stats')"
             ".then(function(r){return r.json();})"
             ".then(function(d){"
               "var el=document.getElementById('ntfyUsage');"
@@ -453,7 +680,7 @@ void WebUI::handleRoot() {
             "var rad=document.querySelector('[name=radius]').value;"
             "btn.disabled=true;btn.textContent='Fetching...';"
             "pre.textContent='Waiting for response...';"
-            "fetch('/api-test?lat='+lat+'&lon='+lon+'&radius='+rad)"
+            "authFetch('/api-test?lat='+lat+'&lon='+lon+'&radius='+rad)"
             ".then(function(r){return r.text();})"
             ".then(function(t){"
               "try{pre.textContent=JSON.stringify(JSON.parse(t),null,2);}"
@@ -466,7 +693,7 @@ void WebUI::handleRoot() {
           "}"
           "function testNotify(btn){"
             "btn.disabled=true;btn.textContent='Sending...';"
-            "fetch('/notify-test',{method:'POST'})"
+            "authFetch('/notify-test',{method:'POST'})"
             ".then(function(r){return r.text();})"
             ".then(function(t){"
               "if(t==='NOT_CONFIGURED')btn.textContent='Not configured';"
@@ -505,9 +732,18 @@ void WebUI::handleRoot() {
             "updateCats();"
           "}"
           "document.addEventListener('DOMContentLoaded',function(){"
-            "showTab(localStorage.getItem('pt-tab')||'wifi');"
+            "var t=localStorage.getItem('pt-tab');"
+            "showTab((!t||t==='wifi')?'general':t);"
             "updateCats();"
             "updatePoiMode();"
+            "if(cfgAuthRequired){"
+              "if(!_getTok()){"
+                "document.body.classList.add('pre-auth');"
+                "showAuthOverlay();"
+              "}else{"
+                "var lb=document.getElementById('logoutBtn');if(lb)lb.style.display='block';"
+              "}"
+            "}"
           "});"
           "refresh();setInterval(refresh,5000);"
           "function toggleDark(){"
@@ -526,7 +762,7 @@ void WebUI::handleRoot() {
           "function checkOta(){"
             "var btn=document.getElementById('otaCheckBtn');"
             "btn.disabled=true;btn.textContent='Checking...';"
-            "fetch('/ota-check')"
+            "authFetch('/ota-check')"
             ".then(function(r){return r.json();})"
             ".then(function(d){"
               "document.getElementById('otaCurrent').textContent=d.current;"
@@ -572,7 +808,7 @@ void WebUI::handleRoot() {
                 "document.getElementById('otaSuccess').style.display='none';"
                 "document.getElementById('otaError').style.display='none';"
                 "document.getElementById('otaModal').classList.add('open');"
-                "fetch('/ota-update',{method:'POST'})"
+                "authFetch('/ota-update',{method:'POST'})"
                 ".then(function(r){return r.json();})"
                 ".then(function(d){"
                   "document.getElementById('otaProgress').style.display='none';"
@@ -608,10 +844,16 @@ void WebUI::handleRoot() {
             "},4000);"
           "}"
           "function doSave(){"
-            "document.getElementById('saveModal').classList.add('open');"
+            "var reqPwd=document.getElementById('reqWebPass')&&document.getElementById('reqWebPass').checked;"
+            "var newPwd=document.querySelector('[name=webPass]')&&document.querySelector('[name=webPass]').value;"
+            "var hasPwd=document.getElementById('hasPwd')&&document.getElementById('hasPwd').value==='1';"
+            "if(reqPwd&&!newPwd&&!hasPwd){alert('Enter a password before enabling password protection.');return;}"
             "var data=new FormData(document.querySelector('form[action=\"/save\"]'));"
-            "fetch('/save',{method:'POST',body:data})"
-            ".then(function(){pollReconnect('saveWifiWarn');})"
+            "authFetch('/save',{method:'POST',body:data})"
+            ".then(function(){"
+              "document.getElementById('saveModal').classList.add('open');"
+              "pollReconnect('saveWifiWarn');"
+            "})"
             ".catch(function(){pollReconnect('saveWifiWarn');});"
           "}"
           "function doClear(){"
@@ -625,7 +867,7 @@ void WebUI::handleRoot() {
           "function doClearConfirm(){"
             "document.getElementById('clearConfirm').style.display='none';"
             "document.getElementById('clearProgress').style.display='';"
-            "fetch('/clear',{method:'POST'})"
+            "authFetch('/clear',{method:'POST'})"
             ".then(function(){pollReconnect('clearWifiWarn');})"
             ".catch(function(){pollReconnect('clearWifiWarn');});"
           "}"
@@ -646,6 +888,8 @@ void WebUI::handleRoot() {
           "});"
           "</script>"
           "</head><body>"
+          "<button id='logoutBtn' onclick='doLogout()' title='Log out'>"
+          "<i class='fa-solid fa-right-from-bracket'></i></button>"
           "<button id='dmBtn' onclick='toggleDark()' title='Toggle dark mode'><i class='fa-solid fa-moon'></i></button>"
           "<h2><i class='fa-solid fa-plane' style='margin-right:8px'></i>PlaneTracker</h2>"
           "<div class='layout'>"
@@ -654,10 +898,11 @@ void WebUI::handleRoot() {
 
     // Inject runtime config coordinates for the live map JS
     {
-        char cfgVars[100];
+        char cfgVars[128];
         snprintf(cfgVars, sizeof(cfgVars),
-            "<script>var cfgLat=%.6f,cfgLon=%.6f,cfgRadiusM=%d;</script>",
-            _cfg.latitude, _cfg.longitude, (int)(_cfg.radius * 1852.0f));
+            "<script>var cfgLat=%.6f,cfgLon=%.6f,cfgRadiusM=%d,cfgAuthRequired=%s;</script>",
+            _cfg.latitude, _cfg.longitude, (int)(_cfg.radius * 1852.0f),
+            (_cfg.requireWebPassword && _cfg.hasWebPassword()) ? "true" : "false");
         html += cfgVars;
     }
 
@@ -665,8 +910,8 @@ void WebUI::handleRoot() {
     html += "<div class='card'>"
             "<div class='tabs' style='border:none;border-radius:0;margin:0'>"
             "<div class='tab-hdr'>"
-            "<button type='button' class='tab-btn' data-tab='wifi'    onclick='showTab(\"wifi\")'>"
-            "<i class='fa-solid fa-wifi'></i><br>WiFi</button>"
+            "<button type='button' class='tab-btn' data-tab='general' onclick='showTab(\"general\")'>"
+            "<i class='fa-solid fa-gear'></i><br>General</button>"
             "<button type='button' class='tab-btn' data-tab='detect'  onclick='showTab(\"detect\")'>"
             "<i class='fa-solid fa-satellite-dish'></i><br>Detection</button>"
             "<button type='button' class='tab-btn' data-tab='notify'  onclick='showTab(\"notify\")'>"
@@ -677,12 +922,30 @@ void WebUI::handleRoot() {
             "<i class='fa-solid fa-cloud-arrow-down'></i><br>Update</button>"
             "</div>";
 
-    // ── WiFi tab ──────────────────────────────────────────────────────────────
-    html += "<div class='tab-panel' id='tab-wifi'>";
+    // ── General tab ───────────────────────────────────────────────────────────
+    html += "<div class='tab-panel' id='tab-general'>";
+
+    html += "<div class='sec'>"
+            "<i class='fa-solid fa-wifi' style='margin-right:5px'></i>WiFi</div>";
     html += "<label>SSID</label>"
             "<input name='ssid' value='" + htmlEscape(_cfg.ssid) + "'>";
     html += "<label>Password</label>"
             "<input name='pass' type='password' placeholder='leave blank to keep current'>";
+
+    {
+        String reqChk    = _cfg.requireWebPassword ? " checked" : "";
+        String hasPwdVal = _cfg.hasWebPassword() ? "1" : "0";
+        String pholder   = _cfg.hasWebPassword() ? "leave blank to keep current" : "set a password";
+        html += "<div class='sec'>"
+                "<i class='fa-solid fa-lock' style='margin-right:5px'></i>Web UI Security</div>";
+        html += "<label>Password</label>"
+                "<input name='webPass' type='password' placeholder='" + pholder + "'>";
+        html += "<input type='hidden' id='hasPwd' value='" + hasPwdVal + "'>";
+        html += "<label class='chk-item' style='margin-top:8px;padding:8px 0'>"
+                "<input type='checkbox' id='reqWebPass' name='reqWebPass' value='1'" + reqChk + ">"
+                " Require password to access web interface"
+                "</label>";
+    }
     html += "</div>";
 
     // ── Detection tab ─────────────────────────────────────────────────────────
@@ -974,6 +1237,8 @@ void WebUI::handleRoot() {
             "</div>"
             "</div>";
 
+    html += "</div>"; // end layout
+
     html += "<div style='text-align:center;margin-top:24px;padding-bottom:16px;font-size:.85em;color:#888'>"
             "<a href='https://github.com/JTCozart/atom-plane-tracker' target='_blank' "
             "style='color:inherit;text-decoration:none;margin-right:20px'>"
@@ -984,12 +1249,54 @@ void WebUI::handleRoot() {
             "<i class='fa-solid fa-tree' style='font-size:1.4em;margin-right:6px;vertical-align:middle'></i>"
             "linktr.ee/jtczrt</a>"
             "</div>";
-    html += "</div></body></html>"; // end layout + body
+    // Auth overlay (visible only when requireWebPassword=true and session is missing/expired)
+    html += "<div class='auth-overlay' id='authOverlay'>"
+            "<div class='auth-box'>"
+            "<h3><i class='fa-solid fa-lock' style='margin-right:8px'></i>PlaneTracker</h3>"
+            // Login view — hidden when switched to forgot-password PIN view
+            "<div id='authLoginView'>"
+            "<label>Password</label>"
+            "<input type='password' id='authPwd' autocomplete='current-password' "
+            "onkeydown='if(event.key===\"Enter\")doLogin()'>"
+            "<div class='auth-err' id='authErr'></div>"
+            // 2FA lockout banner + code input (hidden until 5 failed attempts)
+            "<div id='authLockout' style='display:none;margin-top:10px;padding:8px 10px;"
+            "background:#FFF8E1;border:1px solid #FFB300;border-radius:4px;"
+            "font-size:.83em;color:#5D4037'>"
+            "<i class='fa-solid fa-shield-halved' style='margin-right:5px'></i>"
+            "Check your device for a security code.</div>"
+            "<input type='text' id='authCode' maxlength='4' inputmode='numeric' "
+            "autocomplete='off' placeholder='Device security code' "
+            "style='display:none;margin-top:6px'>"
+            "<button class='btn' style='margin-top:12px' onclick='doLogin()'>Log In</button>"
+            "<div style='text-align:center;margin-top:10px;font-size:.9em'>"
+            "<a style='cursor:pointer;color:#1976D2' onclick='showForgot()'>Forgot password?</a>"
+            "</div>"
+            "</div>"
+            // Forgot-password PIN view (hidden until showForgot() is called)
+            "<div class='pin-sect' id='authPinSect'>"
+            "<p style='font-size:.85em;color:#666;margin:0 0 10px;text-align:center'>"
+            "A reset PIN is now shown on your device screen.</p>"
+            "<label>Device PIN</label>"
+            "<input type='text' id='authPin' maxlength='4' inputmode='numeric' "
+            "autocomplete='off'>"
+            "<label style='margin-top:10px'>New password</label>"
+            "<input type='password' id='authNewPwd' autocomplete='new-password'>"
+            "<div class='auth-err' id='authPinErr'></div>"
+            "<button class='btn' style='margin-top:10px' onclick='doReset()'>Reset Password</button>"
+            "<button class='btn' style='background:#666;margin-top:6px' "
+            "onclick='doCancelReset()'>Cancel</button>"
+            "</div>"
+            "</div>"
+            "</div>";
+
+    html += "</body></html>";
 
     _server.send(200, "text/html", html);
 }
 
 void WebUI::handleSave() {
+    if (!checkAuth()) return;
     Preferences prefs;
     prefs.begin("plantracker", false);
 
@@ -1021,6 +1328,26 @@ void WebUI::handleSave() {
         prefs.putString("poiTypes", _server.arg("poiTypes"));
     prefs.putBool("poiEnabled",     _server.hasArg("poiEnabled"));
 
+    // Web UI password
+    {
+        String newPass  = _server.arg("webPass");
+        bool   reqPwd   = _server.hasArg("reqWebPass");
+        bool   hasNewPass = newPass.length() > 0;
+
+        if (hasNewPass) {
+            String salt = generateSalt();
+            String hash = computePasswordHash(newPass, salt);
+            prefs.putString("webPassHash", hash);
+            prefs.putString("webSalt",     salt);
+            strncpy(_cfg.webPasswordHash, hash.c_str(), sizeof(_cfg.webPasswordHash) - 1);
+            strncpy(_cfg.webPasswordSalt, salt.c_str(), sizeof(_cfg.webPasswordSalt) - 1);
+        }
+        bool hashExists = hasNewPass || prefs.getString("webPassHash", "").length() > 0;
+        bool enable = reqPwd && hashExists;
+        prefs.putBool("reqWebPass", enable);
+        _cfg.requireWebPassword = enable;
+    }
+
     prefs.end();
 
     _server.send(200, "application/json", "{\"ok\":true}");
@@ -1029,6 +1356,7 @@ void WebUI::handleSave() {
 }
 
 void WebUI::handleControl() {
+    if (!checkAuth()) return;
     if (!_server.hasArg("screen")) { _server.send(200, "text/plain", "OK"); return; }
 
     String name = _server.arg("screen");
@@ -1046,6 +1374,7 @@ void WebUI::handleControl() {
 }
 
 void WebUI::handleClear() {
+    if (!checkAuth()) return;
     Preferences prefs;
     prefs.begin("plantracker", false);
     prefs.clear();  // Erase all keys in this namespace
@@ -1057,6 +1386,7 @@ void WebUI::handleClear() {
 }
 
 void WebUI::handleNotifyTest() {
+    if (!checkAuth()) return;
     if (strlen(_cfg.notifyToken) == 0 || strlen(_cfg.notifyTopic) == 0) {
         _server.send(200, "text/plain", "NOT_CONFIGURED");
         return;
@@ -1066,6 +1396,7 @@ void WebUI::handleNotifyTest() {
 }
 
 void WebUI::handleApiTest() {
+    if (!checkAuth()) return;
     double lat    = _server.hasArg("lat")    ? _server.arg("lat").toDouble()   : _cfg.latitude;
     double lon    = _server.hasArg("lon")    ? _server.arg("lon").toDouble()   : _cfg.longitude;
     float  radius = _server.hasArg("radius") ? _server.arg("radius").toFloat() : _cfg.radius;
@@ -1094,6 +1425,7 @@ void WebUI::handleApiTest() {
 }
 
 void WebUI::handleNtfyStats() {
+    if (!checkAuth()) return;
     if (strlen(_cfg.notifyToken) == 0) {
         _server.send(200, "application/json", "{\"error\":\"not_configured\"}");
         return;
@@ -1294,6 +1626,13 @@ String WebUI::buildScreenDiv() {
         float stkU = max(0.0f, 1.0f - (float)stkFree / (24.0f * 1024));
         char stkP[5]; snprintf(stkP, sizeof(stkP), "%d%%", (int)(stkU * 100));
         inner += sysBar("STK", stkU, stkP, 2);
+    } else if (mode == ScreenMode::PinDisplay) {
+        bg = "#00006e";
+        fg = "#ffffff";
+        inner = "<div style='text-align:center;margin-top:25%'>"
+                "<div style='font-size:14px;margin-bottom:8px'>RESET PASSWORD</div>"
+                "<div style='font-size:11px;color:#aaa'>PIN shown on device screen</div>"
+                "</div>";
     }
 
     String html = "<div id='scr' style='background:" + bg + ";color:" + fg + ";"
@@ -1365,6 +1704,7 @@ String WebUI::buildScreenDiv() {
 }
 
 void WebUI::handleScreen() {
+    if (!checkAuth()) return;
     if (_server.hasArg("fragment")) {
         _server.send(200, "text/html", buildScreenDiv());
         return;
@@ -1388,6 +1728,7 @@ void WebUI::handleScreen() {
 }
 
 void WebUI::handleOtaCheck() {
+    if (!checkAuth()) return;
     bool hasUpdate = _ota.check();
     String json = "{\"current\":\"" + String(OtaUpdater::currentVersion()) + "\","
                   "\"latest\":\"" + _ota.latestVersion() + "\","
@@ -1397,6 +1738,7 @@ void WebUI::handleOtaCheck() {
 }
 
 void WebUI::handleOtaUpdate() {
+    if (!checkAuth()) return;
     // Block here while downloading and flashing (~30-60 s).
     // The browser holds the connection open and receives the result when done.
     if (_ota.apply()) {
@@ -1411,15 +1753,190 @@ void WebUI::handleOtaUpdate() {
 }
 
 void WebUI::handleAircraft() {
+    if (!checkAuth()) return;
     _server.send(200, "application/json", _api.serializeActiveAircraft());
 }
 
 void WebUI::handleClearSummary() {
+    if (!checkAuth()) return;
     _store.clearCounts();
     _server.send(200, "application/json", "{\"ok\":true}");
 }
 
 void WebUI::handleHistory() {
+    if (!checkAuth()) return;
     _server.send(200, "application/json", _api.serializeHistory());
+}
+
+// ── Auth handlers ─────────────────────────────────────────────────────────────
+
+void WebUI::handleLoginPost() {
+    if (!_cfg.requireWebPassword || !_cfg.hasWebPassword()) {
+        _sessionToken  = generateToken();
+        _loginFailures = 0;
+        _server.send(200, "application/json",
+                     "{\"ok\":true,\"token\":\"" + _sessionToken + "\"}");
+        return;
+    }
+
+    // While locked: 2FA code must accompany the password
+    if (_lockoutCode.length() > 0) {
+        String code = _server.arg("code");
+        if (code != _lockoutCode) {
+            _lockoutCodeAttempts++;
+            bool regen = (_lockoutCodeAttempts >= 3);
+            if (regen) {
+                char buf[5];
+                snprintf(buf, sizeof(buf), "%04u", esp_random() % 10000);
+                _lockoutCode         = String(buf);
+                _lockoutCodeAttempts = 0;
+                _screenController.setPendingPin(_lockoutCode, "LOGIN CODE");
+                _screenController.markChanged();
+            }
+            String resp = String("{\"ok\":false,\"lockout\":true,\"wrongCode\":true,\"regen\":")
+                          + (regen ? "true" : "false") + "}";
+            _server.send(401, "application/json", resp);
+            return;
+        }
+        // Correct code — clear lockout and restore forgot-password pin if active
+        _lockoutCode         = "";
+        _loginFailures       = 0;
+        _lockoutCodeAttempts = 0;
+        if (_forgotPin.length() > 0) {
+            _screenController.setPendingPin(_forgotPin);
+        } else {
+            _screenController.setPendingPin("");
+            _screenController.setMode(ScreenMode::Scanning);
+        }
+        _screenController.markChanged();
+    }
+
+    String password = _server.arg("password");
+    String hash     = computePasswordHash(password, String(_cfg.webPasswordSalt));
+
+    if (hash == String(_cfg.webPasswordHash)) {
+        _loginFailures = 0;
+        _sessionToken  = generateToken();
+        _server.send(200, "application/json",
+                     "{\"ok\":true,\"token\":\"" + _sessionToken + "\"}");
+        return;
+    }
+
+    _loginFailures++;
+    if (_loginFailures >= 5 && _lockoutCode.length() == 0) {
+        char buf[5];
+        snprintf(buf, sizeof(buf), "%04u", esp_random() % 10000);
+        _lockoutCode = String(buf);
+        _screenController.setPendingPin(_lockoutCode, "LOGIN CODE");
+        _screenController.setMode(ScreenMode::PinDisplay);
+        _screenController.markChanged();
+        _server.send(401, "application/json", "{\"ok\":false,\"lockout\":true}");
+    } else {
+        bool locked = _lockoutCode.length() > 0;
+        _server.send(401, "application/json",
+                     String("{\"ok\":false,\"lockout\":") + (locked ? "true" : "false") + "}");
+    }
+}
+
+void WebUI::handleForgotPassword() {
+    if (!_cfg.hasWebPassword()) {
+        _server.send(400, "application/json", "{\"ok\":false,\"msg\":\"No password set\"}");
+        return;
+    }
+
+    // If a lockout is active, clear it so the device screen can transition cleanly.
+    _lockoutCode         = "";
+    _lockoutCodeAttempts = 0;
+    _loginFailures       = 0;
+
+    char buf[5];
+    snprintf(buf, sizeof(buf), "%04u", esp_random() % 10000);
+    _forgotPin         = String(buf);
+    _forgotPinAttempts = 0;
+
+    _screenController.setPendingPin(_forgotPin);
+    _screenController.setMode(ScreenMode::PinDisplay);
+    _screenController.markChanged();
+
+    _server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void WebUI::handlePinReset() {
+    if (_forgotPin.length() == 0) {
+        _server.send(400, "application/json", "{\"ok\":false,\"msg\":\"No active PIN\"}");
+        return;
+    }
+
+    String submittedPin = _server.arg("pin");
+    String newPass      = _server.arg("newPass");
+
+    if (submittedPin != _forgotPin) {
+        _forgotPinAttempts++;
+        bool regen = (_forgotPinAttempts >= 3);
+        if (regen) {
+            char buf[5];
+            snprintf(buf, sizeof(buf), "%04u", esp_random() % 10000);
+            _forgotPin         = String(buf);
+            _forgotPinAttempts = 0;
+            _screenController.setPendingPin(_forgotPin);
+            _screenController.markChanged();
+        }
+        _server.send(200, "application/json",
+                     String("{\"ok\":false,\"regen\":") + (regen ? "true" : "false") + "}");
+        return;
+    }
+
+    // PIN correct — update or clear the password in NVS and in memory
+    Preferences prefs;
+    prefs.begin("plantracker", false);
+    if (newPass.length() > 0) {
+        String salt = generateSalt();
+        String hash = computePasswordHash(newPass, salt);
+        prefs.putString("webPassHash", hash);
+        prefs.putString("webSalt",     salt);
+        prefs.putBool  ("reqWebPass",  true);
+        strncpy(_cfg.webPasswordHash, hash.c_str(), sizeof(_cfg.webPasswordHash) - 1);
+        strncpy(_cfg.webPasswordSalt, salt.c_str(), sizeof(_cfg.webPasswordSalt) - 1);
+        _cfg.requireWebPassword = true;
+    } else {
+        // Remove the hash/salt entirely so hasWebPassword() returns false
+        // and a future save with reqWebPass=true cannot re-enable auth with a
+        // password the user thought they cleared.
+        prefs.remove("webPassHash");
+        prefs.remove("webSalt");
+        prefs.putBool("reqWebPass", false);
+        _cfg.webPasswordHash[0] = '\0';
+        _cfg.webPasswordSalt[0] = '\0';
+        _cfg.requireWebPassword = false;
+    }
+    prefs.end();
+
+    _forgotPin            = "";
+    _forgotPinAttempts    = 0;
+    _lockoutCode          = "";
+    _lockoutCodeAttempts  = 0;
+    _loginFailures        = 0;
+    _screenController.setPendingPin("");
+    _screenController.setMode(ScreenMode::Scanning);
+    _screenController.markChanged();
+
+    _sessionToken = generateToken();
+    _server.send(200, "application/json",
+                 "{\"ok\":true,\"token\":\"" + _sessionToken + "\"}");
+}
+
+void WebUI::handlePinCancel() {
+    _forgotPin         = "";
+    _forgotPinAttempts = 0;
+    _screenController.setPendingPin("");
+    _screenController.setMode(ScreenMode::Scanning);
+    _screenController.markChanged();
+    _server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void WebUI::handlePinStatus() {
+    bool active = _forgotPin.length() > 0 || _lockoutCode.length() > 0;
+    _server.send(200, "application/json",
+                 active ? "{\"active\":true}" : "{\"active\":false}");
 }
 

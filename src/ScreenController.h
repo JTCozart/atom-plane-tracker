@@ -6,9 +6,15 @@ class AircraftStore;  // forward declaration — avoids circular header dependen
 
 class ScreenController {
 public:
-    ScreenMode current()          const { return _mode; }
-    bool       isDebugMode()      const { return _mode == ScreenMode::Debug; }
-    int        debugScrollOffset() const { return _debugScrollOffset; }
+    ScreenMode    current()          const { return _mode; }
+    bool          isDebugMode()      const { return _mode == ScreenMode::Debug; }
+    int           debugScrollOffset() const { return _debugScrollOffset; }
+    const String& pendingPin()              const { return _pendingPin; }
+    const char*   pendingPinTitle()         const { return _pendingPinTitle; }
+    void          setPendingPin(const String& pin, const char* title = "RESET PIN") {
+        _pendingPin      = pin;
+        _pendingPinTitle = title;
+    }
 
     void setMode(ScreenMode mode) { _mode = mode; }
     void setModeFromString(const String& name);
@@ -34,6 +40,9 @@ public:
     // Returns true (and clears the flag) if a web control request changed state.
     bool consumeWebControlChange();
 
+    // Returns true (and clears the flag) if a button press cancelled an active PinDisplay.
+    bool consumePinCancelled();
+
     // Call every loop iteration. Advances Summary → Radar after the double-click
     // window expires with no second press. Returns true if the mode changed (re-render needed).
     bool update(uint32_t now);
@@ -46,4 +55,7 @@ private:
     bool       _webControlChanged = false;
     uint32_t   _lastClickTime     = 0;
     int        _debugScrollOffset  = 0;
+    String      _pendingPin;
+    const char* _pendingPinTitle{"RESET PIN"};
+    bool        _pinCancelled{false};
 };

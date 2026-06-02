@@ -73,12 +73,14 @@ If the page doesn't load, try refreshing (Ctrl+R or Cmd+R).
 
 Fill in all tabs before saving - this way the device only needs to reboot once.
 
-### WiFi tab
+### General tab
 
 | Field | What to enter |
 |---|---|
 | **SSID** | The name of your home WiFi network |
-| **Password** | Your WiFi password |
+| **WiFi Password** | Your WiFi password |
+| **Web UI Password** | *(Optional)* A password to protect the web interface. Leave blank to skip for now — you can set it later. |
+| **Require password** | *(Optional)* Check this after entering a password above to require login on every new browser session. |
 
 ### Detection tab
 

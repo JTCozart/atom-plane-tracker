@@ -102,12 +102,14 @@ Once connected the web server stays active on the device's normal IP address. Op
 
 Both modes serve the same settings page, organised into five tabs:
 
-**WiFi tab**
+**General tab**
 
 | Field | Description |
 |---|---|
 | SSID | Network name |
-| Password | Leave blank to keep the current password |
+| WiFi Password | Leave blank to keep the current password |
+| Web UI Password | Optional password to protect the web interface. Leave blank to keep the current password. |
+| Require password | When checked, the web interface requires a password on every new browser session. The session is stored in `sessionStorage` — closing the tab ends it. |
 
 **Detection tab**
 
@@ -151,6 +153,7 @@ The settings page includes a live rendering of the device screen in a panel alon
 
 - **Dark mode** - toggle in the top-right corner; defaults to your system preference and persists per browser.
 - **Send Test Notification** - button in the Notifications tab sends a test ntfy push and reports the HTTP result inline without saving or rebooting.
+- **Web UI password** - optional password set in the General tab. The password is stored as a salted SHA-256 hash in NVS — never in plaintext. The session token is stored in `sessionStorage` and is lost when the tab closes. After 5 failed login attempts a randomly generated 4-digit security code is displayed on the device screen; both the code and password are required to log in (proving physical access). A separate **Forgot Password** flow generates a 4-digit reset PIN on the device screen; entering it in the browser allows the password to be changed or cleared (PIN regenerates after 3 failed attempts).
 
 ---
 

@@ -16,6 +16,9 @@ struct Config {
     bool     notifyPoi;             // Notify POI aircraft; overrides class filter
     char     poiTypes[256];         // CSV of ICAO type codes for POI filter
     bool     poiEnabled;            // Show only POI types on device/map/radar
+    char     webPasswordHash[65];   // SHA-256 hex of salt+password; empty = not set
+    char     webPasswordSalt[33];   // 16-byte random salt as hex string
+    bool     requireWebPassword;    // Require password to access web UI
 
     static constexpr uint32_t    kMinPollIntervalMs = 10000;
     static constexpr const char* kSetupSentinel     = "SETUP";
@@ -23,6 +26,7 @@ struct Config {
     bool isUnconfigured()   const { return strcmp(ssid, kSetupSentinel) == 0; }
     bool poiDisplayActive() const { return poiEnabled && poiTypes[0] != '\0'; }
     bool poiNotifyActive()  const { return notifyPoi  && poiTypes[0] != '\0'; }
+    bool hasWebPassword()   const { return webPasswordHash[0] != '\0'; }
 
     // Load settings from NVS; falls back to secrets.h macro defaults.
     void load();

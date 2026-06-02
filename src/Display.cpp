@@ -129,6 +129,37 @@ void Display::showSetupMode() {
     M5.Display.setCursor(2, 72); M5.Display.print("192.168.4.1");
 }
 
+void Display::showPinDisplay(const String& pin, const char* title) {
+    uint16_t bg     = M5.Display.color565(10, 10, 80);
+    uint16_t white  = M5.Display.color565(255, 255, 255);
+    uint16_t yellow = M5.Display.color565(255, 220, 0);
+
+    M5.Display.fillScreen(bg);
+    M5.Display.setTextColor(white, bg);
+
+    // Centre the title horizontally (each char ≈ 6 px at textSize 1)
+    M5.Display.setTextSize(1);
+    int titleX = max(0, (128 - (int)strlen(title) * 6) / 2);
+    M5.Display.setCursor(titleX, 6);
+    M5.Display.print(title);
+
+    M5.Display.drawFastHLine(4, 20, 120, white);
+
+    // Large PIN — textSize(3): 18×24 px/char, 4 chars = 72 px wide; center at x=28
+    M5.Display.setTextSize(3);
+    M5.Display.setTextColor(yellow, bg);
+    M5.Display.setCursor(28, 36);
+    M5.Display.print(pin.c_str());
+
+    M5.Display.drawFastHLine(4, 70, 120, white);
+
+    M5.Display.setTextSize(1);
+    M5.Display.setTextColor(white, bg);
+    M5.Display.setCursor(20, 78);  M5.Display.print("Enter code in");
+    M5.Display.setCursor(20, 90);  M5.Display.print("browser to");
+    M5.Display.setCursor(20, 102); M5.Display.print("continue");
+}
+
 // ── Aircraft screen ───────────────────────────────────────────────────────────
 
 void Display::showLiveAircraft(const Aircraft& aircraft, int etaSeconds,

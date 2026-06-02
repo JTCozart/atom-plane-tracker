@@ -25,10 +25,25 @@ public:
     const String& ipAddress()         const { return _ipAddress; }
     void setIPAddress(const String& ip)     { _ipAddress = ip; }
 
+    // Called when the device button cancels an active PinDisplay.
+    void cancelPinFromDevice() {
+        _forgotPin            = "";
+        _forgotPinAttempts    = 0;
+        _lockoutCode          = "";
+        _loginFailures        = 0;
+        _lockoutCodeAttempts  = 0;
+    }
+
 private:
     WebServer        _server{80};
     bool             _inSetupMode = false;
     String           _ipAddress   = "0.0.0.0";
+    String           _sessionToken;
+    String           _forgotPin;
+    String           _lockoutCode;
+    uint8_t          _forgotPinAttempts{0};
+    uint8_t          _loginFailures{0};
+    uint8_t          _lockoutCodeAttempts{0};
 
     Config&           _cfg;
     AircraftStore&    _store;
@@ -36,6 +51,10 @@ private:
     OtaUpdater&       _ota;
     AircraftJsonApi&  _api;
     ScreenController& _screenController;
+
+    // Returns true if the request is authenticated (or auth is not required).
+    // On failure, sends a 401 JSON response and returns false.
+    bool checkAuth();
 
     void handleRoot();
     void handleSave();
@@ -50,6 +69,11 @@ private:
     void handleAircraft();
     void handleHistory();
     void handleClearSummary();
+    void handleLoginPost();
+    void handleForgotPassword();
+    void handlePinReset();
+    void handlePinCancel();
+    void handlePinStatus();
 
     String buildScreenDiv();
 };

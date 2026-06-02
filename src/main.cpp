@@ -130,6 +130,10 @@ static void render() {
                 OtaUpdater::currentVersion()
             });
             break;
+        case ScreenMode::PinDisplay:
+            display.showPinDisplay(screenController.pendingPin(),
+                                   screenController.pendingPinTitle());
+            break;
     }
 }
 
@@ -159,6 +163,7 @@ static void handleDebugShortPress() {
 
 static void handleNormalShortPress() {
     if (screenController.handleShortPress(store)) store.clearCounts();
+    if (screenController.consumePinCancelled()) webUI.cancelPinFromDevice();
     render();
 }
 
