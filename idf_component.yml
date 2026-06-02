@@ -1,0 +1,2 @@
+dependencies:
+  espressif/esp_insights: ">=1.0.0"

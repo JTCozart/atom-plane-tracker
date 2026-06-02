@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: ESP_Insights
     permissions:
       contents: write
 
@@ -31,6 +32,8 @@ jobs:
         run: cp include/secrets.h.example include/secrets.h
 
       - name: Build firmware
+        env:
+          ESP_INSIGHT_AUTH_KEY: ${{ secrets.ESP_INSIGHT_AUTH_KEY }}
         run: pio run
 
       - name: Stage OTA binary

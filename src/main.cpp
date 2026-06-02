@@ -12,6 +12,7 @@
 #include "OtaUpdater.h"
 #include "ScreenController.h"
 #include "WebUI.h"
+#include "InsightsReporter.h"
 #include "secrets.h"
 #include <esp_ota_ops.h>
 
@@ -252,6 +253,8 @@ void setup() {
         display.showSetupMode();
         return;  // loop() handles AP from here
     }
+
+    InsightsReporter::begin();
 
     display.showScanning();
     FetchEffect effect = store.fetch(config, notifier);
