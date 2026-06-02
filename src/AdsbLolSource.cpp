@@ -1,4 +1,5 @@
 #include "AdsbLolSource.h"
+#include "AnalyticsReporter.h"
 #include <Arduino.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -22,6 +23,9 @@ bool AdsbLolSource::fetch(const Config& cfg, JsonDocument& out) {
         http.end();
         _consecutiveFailures++;
         Serial.printf("[SCAN] fail - consecutive failures: %d\n", _consecutiveFailures);
+        char msg[16];
+        snprintf(msg, sizeof(msg), "HTTP %d", httpCode);
+        AnalyticsReporter::reportError("adsb_fetch", msg);
         return false;
     }
 
@@ -31,6 +35,7 @@ bool AdsbLolSource::fetch(const Config& cfg, JsonDocument& out) {
     if (err) {
         _consecutiveFailures++;
         Serial.println("[SCAN] JSON parse error");
+        AnalyticsReporter::reportError("adsb_parse", err.c_str());
         return false;
     }
 

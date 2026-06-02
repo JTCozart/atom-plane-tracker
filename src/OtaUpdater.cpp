@@ -1,4 +1,5 @@
 #include "OtaUpdater.h"
+#include "AnalyticsReporter.h"
 #include "version.h"
 #include <M5Unified.h>
 #include <WiFiClientSecure.h>
@@ -42,6 +43,9 @@ bool OtaUpdater::check() {
         http.end();
         _status = "Check failed (HTTP " + String(code) + ")";
         Serial.printf("[OTA] check failed: %s\n", _status.c_str());
+        char msg[16];
+        snprintf(msg, sizeof(msg), "HTTP %d", code);
+        AnalyticsReporter::reportError("ota_check", msg);
         return false;
     }
 
@@ -58,6 +62,7 @@ bool OtaUpdater::check() {
     if (err) {
         _status = "Parse error";
         Serial.printf("[OTA] JSON parse error: %s\n", err.c_str());
+        AnalyticsReporter::reportError("ota_parse", err.c_str());
         return false;
     }
 
