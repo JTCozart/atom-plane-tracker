@@ -475,9 +475,19 @@ void WebUI::handleRoot() {
             "var checked=Array.from(document.querySelectorAll('#catList input[data-label]:checked'));"
             "document.getElementById('ntfyClasses').value=checked.map(function(c){return c.value;}).join(',');"
           "}"
+          "function updatePoiMode(){"
+            "var poi=document.getElementById('poiNtfy').checked;"
+            "document.querySelectorAll('#catList input[data-label]').forEach(function(cb){"
+              "cb.disabled=poi;"
+              "cb.closest('label').style.opacity=poi?'0.4':'1';"
+              "cb.closest('label').style.pointerEvents=poi?'none':'';"
+            "});"
+            "if(!poi)updateCats();"
+          "}"
           "document.addEventListener('DOMContentLoaded',function(){"
             "showTab(localStorage.getItem('pt-tab')||'wifi');"
             "updateCats();"
+            "updatePoiMode();"
           "});"
           "refresh();setInterval(refresh,5000);"
           "function toggleDark(){"
@@ -671,6 +681,16 @@ void WebUI::handleRoot() {
             String(Config::kMinPollIntervalMs / 1000) + "s)</small></label>"
             "<input name='poll' type='number' min='" + String(Config::kMinPollIntervalMs / 1000) +
             "' value='" + String(_cfg.pollIntervalMs / 1000) + "'>";
+    {
+        String poiChk = _cfg.poiEnabled ? " checked" : "";
+        html += "<label style='margin-top:14px'>POI Aircraft Types "
+                "<small style='font-weight:normal'>(ICAO type codes, comma-separated &mdash; e.g. B737,F16,C172)</small></label>"
+                "<input name='poiTypes' placeholder='e.g. B737,F16,C172' value='" + String(_cfg.poiTypes) + "'>";
+        html += "<label class='chk-item' style='margin-top:6px;padding:8px 0'>"
+                "<input type='checkbox' name='poiEnabled' value='1'" + poiChk + ">"
+                " Enable POI Filter &mdash; show only listed types on device, map &amp; radar"
+                "</label>";
+    }
     html += "</div>";
 
     // ── Notifications tab ─────────────────────────────────────────────────────
@@ -695,8 +715,17 @@ void WebUI::handleRoot() {
 
         String updChk   = _cfg.notifyUpdates         ? " checked" : "";
         String emergChk = _cfg.notifyEmergencySquawk  ? " checked" : "";
+        String poiChk   = _cfg.notifyPoi              ? " checked" : "";
         html += "<label>ntfy Notification Categories</label>"
                 "<div id='catList' style='margin-top:4px'>"
+                "<label class='chk-item' style='border-bottom:1px solid #eee;margin-bottom:2px;padding-bottom:10px'>"
+                "<input type='checkbox' id='poiNtfy' name='ntfyPoi' value='1'" + poiChk + " onchange='updatePoiMode()'>"
+                " POI Aircraft"
+                "<span title='POI Aircraft notifications override Military, Medevac, Commercial, and Private filters."
+                " Emergency Squawk and Firmware Update notifications are unaffected.'"
+                " style='cursor:help;margin-left:6px;color:#1976D2;font-size:.9em'>"
+                "<i class='fa-solid fa-circle-info'></i></span>"
+                "</label>"
                 "<label class='chk-item'><input type='checkbox' value='MIL'    data-label='Military'"    + milChk  + " onchange='updateCats()'> Military</label>"
                 "<label class='chk-item'><input type='checkbox' value='MEDVAC' data-label='Medevac'"     + medChk  + " onchange='updateCats()'> Medevac</label>"
                 "<label class='chk-item'><input type='checkbox' value='COMM'   data-label='Commercial'"  + commChk + " onchange='updateCats()'> Commercial</label>"
@@ -967,6 +996,10 @@ void WebUI::handleSave() {
         prefs.putString("ntfyClasses", _server.arg("ntfyClasses"));
     prefs.putBool("ntfyUpdates",    _server.hasArg("ntfyUpdates"));
     prefs.putBool("ntfyEmergSquawk", _server.hasArg("ntfyEmergSquawk"));
+    prefs.putBool("ntfyPoi",        _server.hasArg("ntfyPoi"));
+    if (_server.hasArg("poiTypes"))
+        prefs.putString("poiTypes", _server.arg("poiTypes"));
+    prefs.putBool("poiEnabled",     _server.hasArg("poiEnabled"));
 
     prefs.end();
 

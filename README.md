@@ -116,6 +116,8 @@ Both modes serve the same settings page, organised into five tabs:
 | Latitude / Longitude | Center point for aircraft queries (decimal degrees). Use the **Pick on map** button to drop a pin on an interactive map instead of typing coordinates. |
 | Search Radius (NM) | Query radius in nautical miles |
 | Scan Interval (s) | How often to scan for aircraft, in seconds. **Minimum: 10 seconds** |
+| POI Aircraft Types | Comma-separated list of ICAO type codes to track (e.g. `B737,F16,C172`). Only used when the POI filter is enabled. |
+| Enable POI Filter | When checked, only aircraft whose ICAO type code appears in the POI list are shown on the device display, web map, and radar. All other aircraft are ignored. |
 
 **Notifications tab**
 
@@ -123,7 +125,7 @@ Both modes serve the same settings page, organised into five tabs:
 |---|---|
 | ntfy Token | Leave blank to keep the current token |
 | ntfy Topic | Leave blank to disable notifications |
-| ntfy Notification Categories | Checkboxes - select which events trigger notifications. Aircraft classes: Military, Medevac, Commercial, Private. Leave all unchecked to notify for all classes. **Emergency Squawk** (on by default) sends an urgent push when an aircraft squawks 7500, 7600, or 7700. **Firmware Updates** (on by default) sends a push when new firmware is available. |
+| ntfy Notification Categories | Checkboxes — select which events trigger notifications. **POI Aircraft** sends a notification (titled `POI: <Class> Aircraft Detected`) for every aircraft that matches the POI type list; when checked, it overrides the class checkboxes (Military, Medevac, Commercial, Private are disabled) while leaving Emergency Squawk and Firmware Updates unaffected. If POI Aircraft is unchecked, the four class checkboxes apply: leave all unchecked to notify for all classes. **Emergency Squawk** (on by default) sends an urgent push when an aircraft squawks 7500, 7600, or 7700. **Firmware Updates** (on by default) sends a push when new firmware is available. |
 
 An **Account Usage** box at the bottom of the Notifications tab shows messages sent, the account limit, and remaining quota for the current billing period (fetched live from `ntfy.sh/v1/account`). It loads automatically when the tab is opened and has a Refresh button.
 
@@ -165,6 +167,8 @@ The firmware can send push notifications via [ntfy.sh](https://ntfy.sh) when an 
 | Emergency Squawk (7500/7600/7700) | Urgent | 🚨 |
 
 Each notification includes a **Track Flight** action button that opens the live flight on [ADS-B Exchange](https://globe.adsbexchange.com) using the aircraft's ICAO hex code. Emergency squawk notifications include the squawk meaning in the title (e.g. `SQUAWK 7700 — General Emergency`) and fire even if the aircraft's class is not in the class filter.
+
+When **POI Aircraft** notifications are enabled, titles are prefixed with `POI:` (e.g. `POI: Commercial Aircraft Detected`) and the class filter is bypassed — all POI-matched aircraft trigger a notification regardless of their class.
 
 A separate **firmware update** notification is sent when a new release is detected (arrow_up tag, default priority). Both emergency squawk and firmware update notifications can be toggled under **ntfy Notification Categories** in the web UI.
 

@@ -13,6 +13,9 @@ struct Config {
     char     notifyClassFilter[32];
     bool     notifyUpdates;
     bool     notifyEmergencySquawk;
+    bool     notifyPoi;             // Notify POI aircraft; overrides class filter
+    char     poiTypes[256];         // CSV of ICAO type codes for POI filter
+    bool     poiEnabled;            // Show only POI types on device/map/radar
 
     static constexpr uint32_t    kMinPollIntervalMs = 10000;
     static constexpr const char* kSetupSentinel     = "SETUP";

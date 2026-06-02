@@ -87,6 +87,8 @@ Fill in all tabs before saving - this way the device only needs to reboot once.
 | **Latitude / Longitude** | Your location - use the **Pick on map** button to drop a pin instead of typing coordinates manually |
 | **Search Radius (NM)** | How far to scan for aircraft in nautical miles. 10 NM is a good starting point |
 | **Scan Interval (s)** | How often to poll for aircraft in seconds. Default: 15. **Minimum: 10** |
+| **POI Aircraft Types** | *(Optional)* Comma-separated ICAO type codes to focus on, e.g. `B737,F16,C172`. Leave blank if you want to see all aircraft. |
+| **Enable POI Filter** | *(Optional)* Check this to show **only** aircraft whose type matches the list above on the device, map, and radar. Leave unchecked to see everything. |
 
 > **Tip:** Before saving, click the **API Test** tab and press **Run Test**. The device fires a live query using the coordinates and radius you entered and shows the raw JSON response. If you see aircraft you're all set; if it's empty try increasing the radius.
 
@@ -152,7 +154,7 @@ If you want your phone to alert you when aircraft pass overhead:
 |---|---|
 | **ntfy Token** | Your access token from step 6b |
 | **ntfy Topic** | Your unique topic name |
-| **ntfy Notification Categories** | Which events trigger alerts - leave all class checkboxes unchecked to notify for everything. **Emergency Squawk** (checked by default) sends an urgent alert when an aircraft squawks 7500, 7600, or 7700. **Firmware Updates** (checked by default) sends a push when new firmware is available. |
+| **ntfy Notification Categories** | Which events trigger alerts. **POI Aircraft** — if you set up a POI type list in the Detection tab, check this to receive a notification (titled `POI: <Class> Aircraft Detected`) for every POI match; this overrides the class checkboxes. Otherwise, use the class checkboxes (Military, Medevac, Commercial, Private) to filter by category, or leave all unchecked to notify for everything. **Emergency Squawk** (checked by default) sends an urgent alert when an aircraft squawks 7500, 7600, or 7700. **Firmware Updates** (checked by default) sends a push when new firmware is available. |
 
 4. Click **Save & Reboot**
 

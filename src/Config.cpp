@@ -27,6 +27,9 @@ void Config::load() {
     strncpy(notifyClassFilter, prefs.getString("ntfyClasses", NTFY_CLASSES).c_str(), sizeof(notifyClassFilter) - 1);
     notifyUpdates          = prefs.getBool("ntfyUpdates",    true);
     notifyEmergencySquawk  = prefs.getBool("ntfyEmergSquawk", true);
+    notifyPoi              = prefs.getBool("ntfyPoi",         false);
+    strncpy(poiTypes, prefs.getString("poiTypes", "").c_str(), sizeof(poiTypes) - 1);
+    poiEnabled             = prefs.getBool("poiEnabled",      false);
     prefs.end();
 }
 

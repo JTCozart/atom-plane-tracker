@@ -3,6 +3,16 @@
 #include <map>
 #include <set>
 
+// Returns true if `type` (case-insensitive) is found as a whole token in the comma-separated `poiList`.
+static bool typeMatchesPoi(const String& type, const char* poiList) {
+    if (type.isEmpty() || !poiList || poiList[0] == '\0') return false;
+    String needle = "," + type + ",";
+    needle.toUpperCase();
+    String haystack = String(",") + poiList + ",";
+    haystack.toUpperCase();
+    return haystack.indexOf(needle) >= 0;
+}
+
 // ── History ───────────────────────────────────────────────────────────────────
 
 void AircraftStore::recordInHistory(const Aircraft& aircraft) {
@@ -119,6 +129,9 @@ void AircraftStore::processNewAircraft(const String& icao, JsonObject entry,
     float  longitude    = entry["lon"]      | 0.0f;
     float  groundSpeed  = entry["gs"]       | 0.0f;
     float  trackDegrees = entry["track"]    | 0.0f;
+
+    // POI filter: skip aircraft whose type is not in the POI list when filter is active
+    if (cfg.poiEnabled && strlen(cfg.poiTypes) > 0 && !typeMatchesPoi(type, cfg.poiTypes)) return;
 
     AircraftClass classification = Aircraft::classify(callsign, owner, isMilitary, category);
     Aircraft aircraft = { icao, callsign, registration, type, owner, squawk,

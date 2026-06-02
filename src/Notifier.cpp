@@ -6,9 +6,11 @@
 void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     if (strlen(config.notifyToken) == 0 || strlen(config.notifyTopic) == 0) return;
 
-    // If notifyClassFilter is set, only notify for listed classes
-    if (strlen(config.notifyClassFilter) > 0 &&
-        strstr(config.notifyClassFilter, aircraftClassTag(aircraft.classification)) == nullptr) return;
+    // POI mode bypasses class filter; otherwise apply class filter if set
+    if (!config.notifyPoi) {
+        if (strlen(config.notifyClassFilter) > 0 &&
+            strstr(config.notifyClassFilter, aircraftClassTag(aircraft.classification)) == nullptr) return;
+    }
 
     static const char* kRadarIcon = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4e1.png";
 
@@ -37,7 +39,10 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     http.begin(client, String("https://ntfy.sh/") + config.notifyTopic);
     http.addHeader("Authorization", String("Bearer ") + config.notifyToken);
     http.addHeader("Content-Type",  "text/plain");
-    http.addHeader("Title",    String(aircraftClassName(aircraft.classification)) + " Aircraft Detected");
+    String title = config.notifyPoi
+        ? String("POI: ") + aircraftClassName(aircraft.classification) + " Aircraft Detected"
+        : String(aircraftClassName(aircraft.classification)) + " Aircraft Detected";
+    http.addHeader("Title", title);
     http.addHeader("Priority", priority);
     http.addHeader("Tags",     tags);
     http.addHeader("Icon",     kRadarIcon);
