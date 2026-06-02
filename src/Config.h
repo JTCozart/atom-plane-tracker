@@ -20,7 +20,9 @@ struct Config {
     static constexpr uint32_t    kMinPollIntervalMs = 10000;
     static constexpr const char* kSetupSentinel     = "SETUP";
 
-    bool isUnconfigured() const { return strcmp(ssid, kSetupSentinel) == 0; }
+    bool isUnconfigured()   const { return strcmp(ssid, kSetupSentinel) == 0; }
+    bool poiDisplayActive() const { return poiEnabled && poiTypes[0] != '\0'; }
+    bool poiNotifyActive()  const { return notifyPoi  && poiTypes[0] != '\0'; }
 
     // Load settings from NVS; falls back to secrets.h macro defaults.
     void load();

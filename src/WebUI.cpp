@@ -7,6 +7,22 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
+static String htmlEscape(const char* s) {
+    String out;
+    out.reserve(strlen(s));
+    for (; *s; s++) {
+        switch (*s) {
+            case '&':  out += "&amp;";  break;
+            case '<':  out += "&lt;";   break;
+            case '>':  out += "&gt;";   break;
+            case '"':  out += "&quot;"; break;
+            case '\'': out += "&#39;";  break;
+            default:   out += *s;       break;
+        }
+    }
+    return out;
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 void WebUI::begin(bool isSetupMode) {
@@ -472,6 +488,10 @@ void WebUI::handleRoot() {
             "if(id==='update')checkOta();"
           "}"
           "function updateCats(){"
+            "if(document.getElementById('poiNtfy').checked){"
+              "document.getElementById('ntfyClasses').value='';"
+              "return;"
+            "}"
             "var checked=Array.from(document.querySelectorAll('#catList input[data-label]:checked'));"
             "document.getElementById('ntfyClasses').value=checked.map(function(c){return c.value;}).join(',');"
           "}"
@@ -482,7 +502,7 @@ void WebUI::handleRoot() {
               "cb.closest('label').style.opacity=poi?'0.4':'1';"
               "cb.closest('label').style.pointerEvents=poi?'none':'';"
             "});"
-            "if(!poi)updateCats();"
+            "updateCats();"
           "}"
           "document.addEventListener('DOMContentLoaded',function(){"
             "showTab(localStorage.getItem('pt-tab')||'wifi');"
@@ -660,7 +680,7 @@ void WebUI::handleRoot() {
     // ── WiFi tab ──────────────────────────────────────────────────────────────
     html += "<div class='tab-panel' id='tab-wifi'>";
     html += "<label>SSID</label>"
-            "<input name='ssid' value='" + String(_cfg.ssid) + "'>";
+            "<input name='ssid' value='" + htmlEscape(_cfg.ssid) + "'>";
     html += "<label>Password</label>"
             "<input name='pass' type='password' placeholder='leave blank to keep current'>";
     html += "</div>";
@@ -685,7 +705,7 @@ void WebUI::handleRoot() {
         String poiChk = _cfg.poiEnabled ? " checked" : "";
         html += "<label style='margin-top:14px'>POI Aircraft Types "
                 "<small style='font-weight:normal'>(ICAO type codes, comma-separated &mdash; e.g. B737,F16,C172)</small></label>"
-                "<input name='poiTypes' placeholder='e.g. B737,F16,C172' value='" + String(_cfg.poiTypes) + "'>";
+                "<input name='poiTypes' placeholder='e.g. B737,F16,C172' value='" + htmlEscape(_cfg.poiTypes) + "'>";
         html += "<label class='chk-item' style='margin-top:6px;padding:8px 0'>"
                 "<input type='checkbox' name='poiEnabled' value='1'" + poiChk + ">"
                 " Enable POI Filter &mdash; show only listed types on device, map &amp; radar"
@@ -703,7 +723,7 @@ void WebUI::handleRoot() {
     html += "<label>ntfy Token</label>"
             "<input name='ntfyToken' type='password' placeholder='leave blank to keep current'>";
     html += "<label>ntfy Topic</label>"
-            "<input name='ntfyTopic' value='" + String(_cfg.notifyTopic) + "'>";
+            "<input name='ntfyTopic' value='" + htmlEscape(_cfg.notifyTopic) + "'>";
     {
         // Pre-check boxes based on saved filter; empty filter = all (nothing checked)
         const char* f = _cfg.notifyClassFilter;
@@ -733,7 +753,7 @@ void WebUI::handleRoot() {
                 "<label class='chk-item'><input type='checkbox' name='ntfyEmergSquawk' value='1'"        + emergChk + "> Emergency Squawk</label>"
                 "<label class='chk-item'><input type='checkbox' name='ntfyUpdates' value='1'"            + updChk   + "> Firmware Updates</label>"
                 "</div>"
-                "<input type='hidden' name='ntfyClasses' id='ntfyClasses' value='" + String(f) + "'>";
+                "<input type='hidden' name='ntfyClasses' id='ntfyClasses' value='" + htmlEscape(f) + "'>";
     }
     html += "<button type='button' onclick='testNotify(this)' "
             "style='margin-top:10px;padding:8px 14px;background:#37474F;color:#fff;"
@@ -993,7 +1013,7 @@ void WebUI::handleSave() {
     if (_server.hasArg("ntfyTopic"))
         prefs.putString("ntfyTopic",   _server.arg("ntfyTopic"));
     if (_server.hasArg("ntfyClasses"))
-        prefs.putString("ntfyClasses", _server.arg("ntfyClasses"));
+        prefs.putString("ntfyClasses", _server.hasArg("ntfyPoi") ? "" : _server.arg("ntfyClasses"));
     prefs.putBool("ntfyUpdates",    _server.hasArg("ntfyUpdates"));
     prefs.putBool("ntfyEmergSquawk", _server.hasArg("ntfyEmergSquawk"));
     prefs.putBool("ntfyPoi",        _server.hasArg("ntfyPoi"));

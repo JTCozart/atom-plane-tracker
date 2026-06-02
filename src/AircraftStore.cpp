@@ -4,13 +4,18 @@
 #include <set>
 
 // Returns true if `type` (case-insensitive) is found as a whole token in the comma-separated `poiList`.
-static bool typeMatchesPoi(const String& type, const char* poiList) {
-    if (type.isEmpty() || !poiList || poiList[0] == '\0') return false;
-    String needle = "," + type + ",";
-    needle.toUpperCase();
-    String haystack = String(",") + poiList + ",";
-    haystack.toUpperCase();
-    return haystack.indexOf(needle) >= 0;
+// Zero heap allocation: walks poiList token-by-token with strncasecmp.
+static bool typeMatchesPoi(const char* type, const char* poiList) {
+    if (!type || type[0] == '\0' || !poiList || poiList[0] == '\0') return false;
+    size_t typeLen = strlen(type);
+    const char* p = poiList;
+    while (*p) {
+        const char* end = strchr(p, ',');
+        if (!end) end = p + strlen(p);
+        if ((size_t)(end - p) == typeLen && strncasecmp(p, type, typeLen) == 0) return true;
+        p = (*end == ',') ? end + 1 : end;
+    }
+    return false;
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
@@ -115,12 +120,12 @@ void AircraftStore::updateExistingAircraft(Aircraft& existing, JsonObject entry,
     }
 }
 
-void AircraftStore::processNewAircraft(const String& icao, JsonObject entry,
-                                       const Config& cfg, Notifier& notifier) {
+void AircraftStore::registerNewAircraft(const String& icao, JsonObject entry,
+                                        const Config& cfg, Notifier& notifier) {
     bool   isMilitary   = (entry["mil"] | 0) != 0 || ((entry["dbFlags"] | 0) & 1) != 0;
+    String type         = entry["t"]        | "";
     String callsign     = entry["flight"]   | ""; callsign.trim();
     String registration = entry["r"]        | "";
-    String type         = entry["t"]        | "";
     String owner        = entry["ownOp"]    | "";
     String category     = entry["category"] | "";
     String squawk       = entry["squawk"]   | "";
@@ -129,9 +134,6 @@ void AircraftStore::processNewAircraft(const String& icao, JsonObject entry,
     float  longitude    = entry["lon"]      | 0.0f;
     float  groundSpeed  = entry["gs"]       | 0.0f;
     float  trackDegrees = entry["track"]    | 0.0f;
-
-    // POI filter: skip aircraft whose type is not in the POI list when filter is active
-    if (cfg.poiEnabled && strlen(cfg.poiTypes) > 0 && !typeMatchesPoi(type, cfg.poiTypes)) return;
 
     AircraftClass classification = Aircraft::classify(callsign, owner, isMilitary, category);
     Aircraft aircraft = { icao, callsign, registration, type, owner, squawk,
@@ -186,12 +188,21 @@ FetchEffect AircraftStore::fetch(const Config& cfg, Notifier& notifier) {
 
         String icao = hex;
         icao.toUpperCase();
+
+        // POI display filter applies to both new arrivals and ongoing updates.
+        // Aircraft not in `seen` are evicted by pruneStaleAircraft, so pre-existing
+        // non-POI entries are naturally removed on the next scan.
+        if (cfg.poiDisplayActive()) {
+            const char* type = entry["t"] | "";
+            if (!typeMatchesPoi(type, cfg.poiTypes)) continue;
+        }
+
         seen.insert(icao);
 
         if (_activeAircraft.count(icao)) {
             updateExistingAircraft(_activeAircraft[icao], entry, cfg, notifier);
         } else {
-            processNewAircraft(icao, entry, cfg, notifier);
+            registerNewAircraft(icao, entry, cfg, notifier);
             newAircraftDetected = true;
         }
     }

@@ -76,6 +76,6 @@ private:
 
     void buildDebugLines(JsonArray aircraftArray);
     void updateExistingAircraft(Aircraft& existing, JsonObject entry, const Config& cfg, Notifier& notifier);
-    void processNewAircraft(const String& icao, JsonObject entry, const Config& cfg, Notifier& notifier);
+    void registerNewAircraft(const String& icao, JsonObject entry, const Config& cfg, Notifier& notifier);
     void pruneStaleAircraft(const std::set<String>& seen);
 };

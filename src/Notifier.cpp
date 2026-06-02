@@ -6,8 +6,8 @@
 void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     if (strlen(config.notifyToken) == 0 || strlen(config.notifyTopic) == 0) return;
 
-    // POI mode bypasses class filter; otherwise apply class filter if set
-    if (!config.notifyPoi) {
+    bool poiActive = config.poiNotifyActive();
+    if (!poiActive) {
         if (strlen(config.notifyClassFilter) > 0 &&
             strstr(config.notifyClassFilter, aircraftClassTag(aircraft.classification)) == nullptr) return;
     }
@@ -39,7 +39,7 @@ void Notifier::notifyDetection(const Aircraft& aircraft, const Config& config) {
     http.begin(client, String("https://ntfy.sh/") + config.notifyTopic);
     http.addHeader("Authorization", String("Bearer ") + config.notifyToken);
     http.addHeader("Content-Type",  "text/plain");
-    String title = config.notifyPoi
+    String title = poiActive
         ? String("POI: ") + aircraftClassName(aircraft.classification) + " Aircraft Detected"
         : String(aircraftClassName(aircraft.classification)) + " Aircraft Detected";
     http.addHeader("Title", title);
