@@ -226,6 +226,14 @@ static void handlePoll() {
     render();
 }
 
+static void handleAnalyticsHeartbeat() {
+    static constexpr uint32_t kHeartbeatIntervalMs = 60 * 60 * 1000; // 1 hour
+    static uint32_t lastHeartbeat = 0;
+    if (millis() - lastHeartbeat < kHeartbeatIntervalMs) return;
+    lastHeartbeat = millis();
+    AnalyticsReporter::reportHeartbeat();
+}
+
 // ── Entry points ──────────────────────────────────────────────────────────────
 
 void setup() {
@@ -278,6 +286,7 @@ void loop() {
     if (screenController.update(millis())) render();
     handleAutoRefresh();
     handlePoll();
+    handleAnalyticsHeartbeat();
 
     if (!webUI.isInSetupMode() && ota.isDue()) {
         if (ota.check()) notifier.notifyUpdate(ota.latestVersion(), config);

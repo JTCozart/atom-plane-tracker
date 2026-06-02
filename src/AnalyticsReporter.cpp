@@ -7,15 +7,16 @@
 static const char* kEndpoint = "https://app.posthog.com/capture/";
 static const char* kApiKey   = "phc_u3KvbsAKsLL7jghUPb9i59NpcW5uHrS7wNn9TELwCTrN";
 
-void AnalyticsReporter::reportBoot() {
+void AnalyticsReporter::send(const char* event) {
     char body[256];
     snprintf(body, sizeof(body),
         "{\"api_key\":\"%s\","
-        "\"event\":\"device_boot\","
+        "\"event\":\"%s\","
         "\"distinct_id\":\"%s\","
         "\"properties\":{"
         "\"firmware_version\":\"%s\"}}",
         kApiKey,
+        event,
         WiFi.macAddress().c_str(),
         FIRMWARE_VERSION);
 
@@ -27,3 +28,6 @@ void AnalyticsReporter::reportBoot() {
     http.POST(body);
     http.end();
 }
+
+void AnalyticsReporter::reportBoot()      { send("device_boot"); }
+void AnalyticsReporter::reportHeartbeat() { send("device_heartbeat"); }
