@@ -1710,7 +1710,7 @@ void WebUI::handleScreen() {
         return;
     }
 
-    uint32_t refreshSec = max(5u, _cfg.pollIntervalMs / 1000);
+    uint32_t refreshSec = max((uint32_t)5, _cfg.pollIntervalMs / 1000u);
     String html =
         "<!DOCTYPE html><html><head>"
         "<title>PlaneTracker - Screen</title>"
