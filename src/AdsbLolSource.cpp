@@ -25,12 +25,20 @@ bool AdsbLolSource::fetch(const Config& cfg, JsonDocument& out) {
         return false;
     }
 
-    DeserializationError err = deserializeJson(out, http.getStream());
+    String body = http.getString();
     http.end();
+
+    if (body.isEmpty()) {
+        _consecutiveFailures++;
+        Serial.println("[SCAN] empty response (OOM?)");
+        return false;
+    }
+
+    DeserializationError err = deserializeJson(out, body);
 
     if (err) {
         _consecutiveFailures++;
-        Serial.println("[SCAN] JSON parse error");
+        Serial.printf("[SCAN] JSON parse error: %s\n", err.c_str());
         return false;
     }
 

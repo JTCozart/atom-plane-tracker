@@ -54,6 +54,12 @@ bool OtaUpdater::check() {
     String body = http.getString();
     http.end();
 
+    if (body.isEmpty()) {
+        _status = "Empty response (OOM?)";
+        Serial.println("[OTA] empty response body — possible heap exhaustion");
+        return false;
+    }
+
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, body,
                                                DeserializationOption::Filter(filter));

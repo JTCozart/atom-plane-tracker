@@ -18,8 +18,7 @@ void InsightsReporter::begin() {
         .log_type = ESP_DIAG_LOG_TYPE_ERROR | ESP_DIAG_LOG_TYPE_WARNING | ESP_DIAG_LOG_TYPE_EVENT,
         .auth_key = kKey,
     };
-    esp_insights_init(&cfg);
+    if (esp_insights_init(&cfg) != ESP_OK) return;
 
-    // Report firmware version as a boot event — visible in Insights dashboard Events tab.
     ESP_DIAG_EVENT("boot", "Firmware version: %s", FIRMWARE_VERSION);
 }

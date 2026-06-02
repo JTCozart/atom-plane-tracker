@@ -1450,10 +1450,12 @@ void WebUI::handleNtfyStats() {
     filter["stats"]["messages_remaining"] = true;
     filter["limits"]["messages"]          = true;
 
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, http.getStream(),
-                                               DeserializationOption::Filter(filter));
+    String body = http.getString();
     http.end();
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, body,
+                                               DeserializationOption::Filter(filter));
 
     if (err) {
         _server.send(200, "application/json", "{\"error\":\"parse_error\"}");
