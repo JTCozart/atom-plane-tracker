@@ -227,7 +227,7 @@ static void handlePoll() {
 }
 
 static void handleAnalyticsHeartbeat() {
-    static constexpr uint32_t kHeartbeatIntervalMs = 15 * 60 * 1000; // 15 minutes
+    static constexpr uint32_t kHeartbeatIntervalMs = 30 * 60 * 1000; // 30 minutes
     static uint32_t lastHeartbeat = 0;
     if (millis() - lastHeartbeat < kHeartbeatIntervalMs) return;
     lastHeartbeat = millis();
