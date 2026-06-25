@@ -1,5 +1,7 @@
 ﻿# atom-plane-tracker
 
+<a href="https://www.aihonestybadge.com" target="_blank" rel="noopener"><img src="https://www.aihonestybadge.com/badges/ai-assisted.svg" alt="AI Assisted Badge" height="20" /></a>
+
 ESP32-S3 firmware for the **M5Stack Atom S3R** that connects to a free public ADS-B API and displays live aircraft flying within a configurable radius of a fixed coordinate. No API key required.
 
 ---
